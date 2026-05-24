@@ -7,6 +7,7 @@ Centralne repozytorium dokumentacji projektu ProperBackup.
 ```
 /changelog      — lista zmian z datami (co zostalo zmienione/dodane)
 /architecture   — schematy decyzji architektonicznych, opisy komponentow
+/deployment     — przewodnik wdrozeniowy (VPS, nginx, SSL, Stripe)
 /scripts        — skrypty migracyjne, narzedzia operacyjne
 ```
 
