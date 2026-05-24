@@ -70,7 +70,36 @@ Brak crona/jobu — system sprawdza `expiresAt > now` przy kazdym request. Gdy m
 ### Double-cancel
 Stripe nie wysle drugiego `subscription.deleted` dla tej samej subskrypcji. Jesli klient kupi nowy monthly i znow anuluje — `max()` + zachowanie czasu gwarantuja ze data nigdy nie cofa sie.
 
+## Paranoid QA — defensywna architektura (2026-05-24)
+
+### Race Conditions: SELECT FOR UPDATE
+`activateSubscription` i `handleSubscriptionDeleted` uzywaja transakcji z `SELECT FOR UPDATE` na wierszu usera. Zapobiega to scenariuszowi, w ktorym dwa rownoczesne webhooki (np. `invoice.paid` + `checkout.completed`) nadpisza sie nawzajem. Nowe metody w `UserStore`: `findByIdForUpdate(conn, id)` + connection-aware overloady `updateSubscription`, `deactivateSubscription` itd.
+
+### Double-Click Protection
+- **Frontend:** `checkoutLoading` state blokuje przycisk + pokazuje "Przekierowuje..."
+- **Backend:** Deterministic idempotency key (SHA-256 z userId+plan+promo+30s bucket). Stripe gwarantuje jedna sesje per klucz.
+- **bfcache fix:** `pageshow` event listener resetuje `checkoutLoading` gdy uzytkownik wraca przyciskiem "Back" z checkout Stripe. Bez tego przycisk zostawalby zablokowany na stale.
+
+### Stripe Retry z Exponential Backoff
+`StripeHandler.withRetry()` — 3 proby z opoznieniami 200ms, 800ms, 2000ms. Obsluguje:
+- `RateLimitException` (429)
+- `ApiConnectionException` (siec)
+- `ApiException` z statusCode >= 500
+
+4xx (np. `InvalidRequestException`) NIE sa ponawiane.
+
+### Edge Case: klient z >365 dniami
+Mechanizm `capped + overflow` w `calculateProratedDiscount` poprawnie obsluguje kazdy przypadek:
+- Kupon = `min(cena_nowego_planu, wartosc_pozostala)` — nigdy nie przekracza ceny planu
+- Overflow = roznica idzie na `customer.balance` w Stripe (kredyt na przyszle faktury)
+- Przetestowane scenariuszami: 500 dni annual→monthly, 500 dni annual→annual, 60 dni monthly→monthly
+
+### Testy (122 integracyjne, 39 frontend)
+- TestContainers z prawdziwym PostgreSQL 16 (NIE H2)
+- Testy negatywne: 8-watkowy concurrent `activateSubscription`, row-lock blocking, withRetry positive/negative/4xx
+- E2E na zywo: nowe konto `qa-paranoid-test@properbackup.dev` na serwerze testowym
+
 ## PRy implementujace
 
-- `properbackup-buffer#21` — backend (activateSubscription max() + handleSubscriptionDeleted)
-- `properbackup-web#30` — frontend (usuniety downgrade guard)
+- `properbackup-buffer#21` — backend (activateSubscription max() + handleSubscriptionDeleted + SELECT FOR UPDATE + retry)
+- `properbackup-web#30` — frontend (usuniety downgrade guard + bfcache fix)
