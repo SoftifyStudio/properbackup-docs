@@ -26,11 +26,19 @@ SELECT
   stripe_test_mode,
   stripe_customer_id AS test_customer_id,
   stripe_live_customer_id AS live_customer_id,
+  stripe_subscription_id AS test_subscription_id,
+  stripe_live_subscription_id AS live_subscription_id,
   subscription_plan,
   subscription_expires_at
 FROM users
 WHERE stripe_customer_id IS NOT NULL
 ORDER BY email;
+
+-- 1a. AUDIT: Sprawdz czy live price IDs sa juz utworzone w Stripe
+-- (sa tworzone *lazy* przy pierwszym live checkoutcie)
+SELECT plan_key, mode, stripe_price_id, updated_at
+FROM stripe_price_config
+ORDER BY plan_key, mode;
 
 -- 2. Przelacz wybranego uzytkownika na live
 -- ZMIEN 'user@example.com' na email uzytkownika
@@ -41,7 +49,9 @@ SET stripe_test_mode = FALSE
 WHERE email = 'user@example.com';
 
 -- Weryfikacja
-SELECT id, email, stripe_test_mode, stripe_customer_id, stripe_live_customer_id
+SELECT id, email, stripe_test_mode,
+       stripe_customer_id, stripe_live_customer_id,
+       stripe_subscription_id, stripe_live_subscription_id
 FROM users
 WHERE email = 'user@example.com';
 
@@ -64,6 +74,13 @@ COMMIT;
 --    a. Aplikacja sprawdza stripe_live_customer_id → NULL
 --    b. Tworzy nowego customera w live Stripe
 --    c. Zapisuje do stripe_live_customer_id
---    d. Uzytkownik podpina prawdziwa karte
--- 3. Webhooki z live Stripe sa weryfikowane live webhook secret
+--    d. Sprawdza stripe_price_config (plan_key, mode='live') → jesli brak, tworzy
+--       Product/Price w live Stripe i zapisuje do bazy (lazy bootstrap)
+--    e. Uzytkownik podpina prawdziwa karte
+-- 3. Po sukcesie checkoutu:
+--    a. Nowy sub ID zapisywany w stripe_live_subscription_id
+--    b. Stary stripe_subscription_id (test) pozostaje nietkniety
+--       (mozna na niego wrocic flipujac stripe_test_mode = TRUE)
+-- 4. Webhooki z live Stripe sa weryfikowane live webhook secret
+--    (dual-secret na tym samym endpoincie /api/payment/stripe/webhook)
 -- =============================================================================

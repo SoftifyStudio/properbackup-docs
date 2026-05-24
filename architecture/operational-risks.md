@@ -16,46 +16,37 @@ Nawet najlepszy kod nie przewidzi wszystkiego. Ponizej lista znanych ryzyk opera
 - Uzytkownik zobaczy "Live" w UI, ale platnosc trafi do Stripe TEST dashboard
 - **Strata przychodu** — realne pieniadze nie zostana pobrane
 
-### Jak sie chronic
+### Stan obecny (zaimplementowane)
 
-#### A. Walidacja przy starcie aplikacji (rekomendacja)
-
-Dodaj sprawdzenie w `StripeKeyProvider.init {}`:
+`StripeKeyProvider.init {}` zglasza trzy warningi przy starcie aplikacji:
 
 ```kotlin
-init {
-    // ... istniejacy kod logowania prefixow ...
-
-    // OSTRZEZENIE: live klucze == test klucze
-    if (liveSecretKey == testSecretKey && testSecretKey.isNotBlank()) {
-        log.warn("⚠️ STRIPE LIVE KEYS ARE IDENTICAL TO TEST KEYS — " +
-            "live billing will use test Stripe. Set STRIPE_LIVE_SECRET_KEY " +
-            "before promoting any user to stripe_test_mode=FALSE")
-    }
+// (A) live klucze == test klucze
+if (liveSecretKey.isNotBlank() && liveSecretKey == testSecretKey) {
+    log.warn("⚠️  STRIPE LIVE KEYS NOT CONFIGURED — live secret key falls back to test secret key. ...")
+}
+// (B) test klucz ma prefix live
+if (testSecretKey.isNotBlank() && testSecretKey.startsWith("sk_live_")) {
+    log.error("CRITICAL: STRIPE_TEST_SECRET_KEY has sk_live_ prefix — test/live keys appear swapped!")
+}
+// (C) live klucz ma prefix test
+if (liveSecretKey.isNotBlank() && liveSecretKey != testSecretKey && liveSecretKey.startsWith("sk_test_")) {
+    log.error("CRITICAL: STRIPE_LIVE_SECRET_KEY has sk_test_ prefix — live mode would still hit test Stripe!")
 }
 ```
 
-#### B. Sprawdzenie prefix klucza
+Wszystkie trzy ostrzezenia leca przy starcie backendu — kazdy deploy logu produkcyjnego daje natychmiastowy sygnal o blednej konfiguracji.
 
-Stripe klucze test zawsze zaczynaja sie od `sk_test_`, a live od `sk_live_`. Mozna dodac walidacje:
+### Checklist przed przelaczeniem na live
 
-```kotlin
-if (!testMode && liveSecretKey.startsWith("sk_test_")) {
-    log.error("CRITICAL: User {} is in LIVE mode but LIVE key has test prefix!", userId)
-    // Opcjonalnie: zablokuj platnosc lub fallback na test z logiem
-}
-```
-
-#### C. Checklist przed przelaczeniem na live
-
-Przed wykonaniem `UPDATE users SET stripe_test_mode = FALSE`:
+Pomimo automatycznych warningow, przed wykonaniem `UPDATE users SET stripe_test_mode = FALSE` operator powinien:
 
 - [ ] `STRIPE_LIVE_SECRET_KEY` ustawiony i zaczyna sie od `sk_live_`
 - [ ] `STRIPE_LIVE_PUBLIC_KEY` ustawiony i zaczyna sie od `pk_live_`
 - [ ] `STRIPE_LIVE_WEBHOOK_SECRET` ustawiony (osobny webhook endpoint w Stripe Dashboard)
 - [ ] Webhook endpoint w Stripe Live skonfigurowany na `https://domena/api/payment/stripe/webhook`
 - [ ] Test webhook z Stripe Live Dashboard → 200 OK
-- [ ] Backend zrestartowany po zmianie `.env`
+- [ ] Backend zrestartowany po zmianie `.env` — w logach BRAK warninga "STRIPE LIVE KEYS NOT CONFIGURED"
 
 ---
 
