@@ -267,6 +267,81 @@ Po N (default 7) dniach od seal: pack moze byc usuniety z disku (juz na OVH).
 Klient restore: pobiera z OVH bezposrednio (lub backend pre-fetches do cache).
 ```
 
+### 4.5 Recovery Session lifecycle (Full-System Restore)
+
+**Single source of truth:** [`user-facing-recovery-spec.md`](user-facing-recovery-spec.md) sekcja 8 (Section B).
+
+Recovery Session to **wieloetapowa sesja** restore (10 stanow) — nie pojedyncza akcja. Buffer wystawia `/recovery/*` endpointy + state machine + audit log + lockdown guard.
+
+```
+State machine (10 stanow):
+
+   IDLE → REQUESTED → PLANNING → AWAITING_USER_CONFIRM
+                                       ↓
+                              THAWING (cold) | READY (hot)
+                                       ↓
+                              AGENT_RESTORING → VERIFYING
+                                       ↓
+                              DONE | FAILED | CANCELLED
+
+(legal transitions: patrz RecoveryStateMachine.kt; illegal = throw)
+
+Per-server lockdown:
+- UNIQUE constraint: tylko 1 aktywna sesja per server_id
+- RecoveryGuard.ensureNoActiveRecovery() blokuje:
+    BackupHandler.startBackup
+    SnapshotHandler.deleteSnapshot
+    RestoreFileHandler (single file)
+    ConfigHandler.update
+- Endpointy zwracaja 423 Locked z {sessionId, blocked_action}
+
+Pre-recovery snapshot (OBOWIAZKOWY):
+- Tworzony PRZED transitions READY → AGENT_RESTORING
+- Snapshot type = PRE_RECOVERY (vs AUTO/MANUAL/TOMBSTONE)
+- 30-day grace period (no quota count)
+- Trigger: buffer wysyla agent recovery_command:execute → agent najpierw robi backup
+- Po success: archive_snapshot.pre_recovery_session_id = <recovery_id>
+- Cannot be deleted dopoki recovery_session.state IN (active states)
+
+Tabele DB (delta — patrz spec sekcja 5.2):
+- recovery_session: glowna tabela (id, server_id, user_id, target_snapshot_id, state, timestamps, dry_run_*, files_*, failure_reason)
+- recovery_operation: per-file operacje (id, session_id, type, path_hash, sha256_*, state)
+- recovery_dry_run: snapshot dry run result (counts, samples, ETA)
+
+Endpointy (HTTP/JSON):
+- POST   /recovery/start
+- GET    /recovery/:id
+- GET    /recovery/:id/stream (SSE)
+- POST   /recovery/:id/confirm
+- POST   /recovery/:id/cancel
+- GET    /recovery/:id/audit
+- GET    /recovery/history?server_id=
+- GET    /agent/recovery/poll                       (agent polling fallback)
+- POST   /agent/recovery/:id/dry_run_result         (agent reports)
+- POST   /agent/recovery/:id/progress
+- POST   /agent/recovery/:id/complete
+
+Audit log:
+- Every state transition → entry w audit_log z recovery_session_id FK
+- Operations batched 1 per 100 plikow
+- RODO: path_hash = sha256(path) zamiast plaintext path
+```
+
+**Co buffer MUSI dostarczyc (delegowane do `user-facing-recovery-spec.md` PR-a):**
+- DB migration (3 nowe tabele + alter archive_snapshot)
+- RecoverySessionStore.kt (CRUD + state machine)
+- RecoveryHandler.kt (HTTP routes)
+- RecoveryGuard.kt (lockdown na write actions)
+- DryRunComputer.kt (orchestracja dry run)
+- PreRecoverySnapshotCreator.kt (trigger snapshot)
+- RecoveryAuditLog.kt (append-only)
+- Integration test: REQUESTED → DONE w Testcontainers (stub agent)
+
+**Forbidden behaviors:**
+- Buffer NIGDY nie usuwa pliku z OVH w trakcie recovery (immutable storage HR-3)
+- Buffer NIGDY nie pozwala 2 aktywnym recovery na tym samym server (UNIQUE WHERE state NOT IN (terminal))
+- Buffer NIGDY nie zatwierdza DONE bez verify result od agenta
+
 ---
 
 ## 5. Test Groups
