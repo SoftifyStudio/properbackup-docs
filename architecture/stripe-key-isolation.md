@@ -42,8 +42,13 @@ Wymagania:
 │  PostgreSQL: users table                                │
 │                                                         │
 │  stripe_test_mode BOOLEAN DEFAULT TRUE                  │
-│  stripe_customer_id VARCHAR(64)      -- test customer   │
-│  stripe_live_customer_id VARCHAR(64) -- live customer   │
+│  stripe_customer_id VARCHAR(64)          -- test cus    │
+│  stripe_live_customer_id VARCHAR(64)     -- live cus    │
+│  stripe_subscription_id VARCHAR(64)      -- test sub    │
+│  stripe_live_subscription_id VARCHAR(64) -- live sub    │
+│                                                         │
+│  stripe_price_config (plan_key, mode) PRIMARY KEY       │
+│  — osobne wiersze test/live per plan                    │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -76,6 +81,39 @@ Gdy uzytkownik jest przelaczany na live:
 2. Jesli NULL → `getOrCreateStripeCustomer()` tworzy nowego customera w LIVE Stripe
 3. Nowy customer ID zapisywany w `stripe_live_customer_id`
 4. Test customer ID (`stripe_customer_id`) pozostaje niezmieniony
+
+### Subscription ID izolacja
+
+Identycznie jak customer ID — Stripe subscription IDs sa scope'owane do konta.
+
+- `stripe_subscription_id` — sub ID w srodowisku TEST
+- `stripe_live_subscription_id` — sub ID w srodowisku LIVE
+
+`UserStore.User.currentStripeSubscriptionId()` zwraca pole odpowiadajace aktualnemu `stripe_test_mode`. Po flipnieciu uzytkownika na live:
+
+1. Stary test subscription ID pozostaje w `stripe_subscription_id` (mozna na niego wrocic flipujac flage z powrotem na test)
+2. Nowy live subscription ID zapisywany w `stripe_live_subscription_id` przy pierwszym live checkoutcie
+3. `cancelExistingStripeSubscription()` operuje WYLACZNIE na ID z aktualnego trybu — nie probuje wycofac test sub przez live API (co i tak by nie zadzialalo)
+
+### Price/Product ID izolacja
+
+Stripe Product i Price obiekty zyja w jednym koncie naraz (test ALBO live), wiec ten sam plan musi miec dwa price ID:
+
+```
+stripe_price_config:
+  PRIMARY KEY (plan_key, mode)
+
+  (monthly, test) → price_test_AAA
+  (monthly, live) → price_live_BBB
+  (annual,  test) → price_test_CCC
+  (annual,  live) → price_live_DDD
+```
+
+Inicjalizacja:
+1. **Test prices** sa tworzone *eager* przy starcie aplikacji (jezeli sa test keys i jeszcze brakuje wpisow w `stripe_price_config`)
+2. **Live prices** sa tworzone *lazy* — przy pierwszym checkoutcie usera z `stripe_test_mode = FALSE`. Dzieki temu aplikacja sie nie crashuje przy starcie gdy `STRIPE_LIVE_*` env vars nie sa jeszcze ustawione
+
+W praktyce: operator moze najpierw rozkrecic test mode i bezpiecznie odpalic backend, a dopiero potem (gdy live keys sa juz ustawione) flipowac pierwszego usera na live. Price'y w live Stripe zostana wtedy automatycznie utworzone.
 
 ### Webhook dual-secret
 
