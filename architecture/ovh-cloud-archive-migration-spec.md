@@ -1,9 +1,95 @@
 # OVH Cloud Archive — Migration & Live Storage Master Plan
 
-Wersja: 1.0 (initial, pre-prod)
+Wersja: 1.1 (initial, pre-prod) — **2026-05-26: dodano sekcje 0 Hard Requirements (Daniel ack: immutable storage, FTP-style upload+list only)**
 Repo glowne: `properbackup-buffer/.../ovh/`
 Status: SPEC — czeka na implementacje przez kolejnego agenta
 Priorytet: **P1** (przed flipnieciem pierwszego prawdziwego klienta na live)
+
+---
+
+## 0. Hard Requirements (Immutable Rules) — PRAWO PROJEKTU
+
+> **Te zasady sa NIENARUSZALNE. Wymuszone przez Daniela jako twardy contract dla OVH integracji. Kazde naruszenie = automatic rejection PR-a w review.**
+>
+> Single Source of Truth: `Biznesplan_ProperBackup_v6_AI_Blueprint` (sekcja 2.2 Storage Strategy — "immutable, append-only, deletion is metadata-only")
+
+**HR-1. Storage Filozofia: TYLKO upload + list (zero DELETE)**
+OvhSwiftClient / OvhFtpClient w produkcji obsluguje WYLACZNIE:
+- `put(objectName, data)` — upload nowej paczki
+- `list(prefix)` — listowanie istniejacych obiektow
+- `get(objectName)` — odczyt (dla restore)
+- `headObject(objectName)` — metadata only (dla integrity check)
+
+**NIE WOLNO** wolac `delete()` w produkcji. Implementacja: `DevSafetyGuard.delete()` MUSI rzucic `SafetyException("Storage is immutable; deletion is metadata-only")` gdy `env=production`. W env=dev/test mock storage moze pozwalac DELETE dla testow czystki.
+
+**HR-2. Klient widzi "deleted" jako metadata operation**
+Gdy klient kliknie "Usun plik" w panelu lub przeniesie do "Kosza":
+- Insert do `archive_snapshot` z `deleted_at=now()` (lub UPDATE)
+- Aktualizacja `file_state` z `state='DELETED'`
+- **Fizyczny obiekt na OVH ZOSTAJE niezmieniony**
+- UI pokazuje "Plik usunieto 2026-05-24" + przycisk "Przywroc"
+- Restore z OVH zawsze mozliwy (klient placi tylko egress)
+
+**HR-3. Pack window 900-950MB (z buffera, NIE OVH-side)**
+OVH NIE WIE o "pack window" — to jest kontrakt buffera. Cross-ref `buffer-core-master-spec.md` HR-2. Ale OVH MUSI akceptowac obiekty 900MB-950MB stabilnie. Test: upload 950MB blob -> success bez timeout, weryfikacja przez headObject.
+
+**HR-4. FTP-Style Simulation w MockSwiftClient**
+Mock storage uzywany w testach i dev MUSI symulowac FTP semantyki OVH Cloud Archive:
+- `put(objectName, data)` — pisze do `mockDir/<container>/<objectName>` z atomic rename .tmp -> .final
+- `list(prefix)` — listuje pliki w `mockDir` z matching prefix
+- `delete()` — disabled w MockSafetyGuard (rzuca exception)
+- Symulowane opoznienie >2s na put (OVH WAN latency)
+- Symulowane okresowe 5xx (5% rate) dla testow circuit breaker
+
+Mock jest **production-equivalent semantycznie** — to nie tylko local fs wrapper, to **simulator** OVH zachowania.
+
+**HR-5. Integrity Verification po upload**
+Po `ovh.put(objectName, data)`:
+- Sprawdz `ovh.headObject(objectName).contentLength == expectedSize`
+- Sprawdz ETag lub MD5 jezeli dostepne (OVH Swift zwraca ETag = md5)
+- Jezeli mismatch -> retry put (max 3), potem alert `pb_ovh_integrity_failure`
+- Insert do `archive_snapshot.upload_verified_at = now()` PO success
+
+**HR-6. Object Naming — pseudonimizacja + lifecycle prefix**
+Format (immutable po pierwszym release, do v2.0):
+```
+<userHash-8>/<serverHash-8>/<yearMonth>/<pack-uuid>.bin
+```
+- `userHash-8`: sha256(userId).substring(0,8) — RODO pseudonimizacja
+- `serverHash-8`: sha256(serverId).substring(0,8)
+- `yearMonth`: `2026-05` (UTC)
+- `pack-uuid`: UUID v4
+
+Naruszenie schematu = automatic rejection (kompatybilnosc backward z istniejacymi blobami).
+
+**HR-7. Cold Tier Lifecycle (NIE delete, tylko transition)**
+- Hot tier: ~0.03 PLN/GB/miesiac, instant retrieval
+- Cold tier: ~0.01 PLN/GB/miesiac, retrieval ~3-5h
+- Po 90 dniach hot -> auto-transition do cold (OVH lifecycle policy)
+- Po 365 dniach cold -> **NIE DELETE**, zostaje archived (klient placi minimum cold storage)
+- Klient moze zazadac restore z cold (cost-aware UI)
+
+**HR-8. Cost Monitoring (krytyczne dla rentownosci)**
+- Codzienny job `OvhCostFetcher` -> pobiera billing data z OVH API
+- Zapis do `ovh_cost_daily` tabela (date, total_pln, storage_gb, egress_gb)
+- Alert Slack jezeli `daily_pln > X` (default X=50 PLN/dzien, configurable)
+- Alert critical jezeli `daily_pln > 2*30day_avg` (rapid spike)
+
+**HR-9. Disaster Recovery z OVH (jezeli PostgreSQL padl)**
+Implementacja `OvhRecoveryWalker`:
+- Skanuje OVH list() przez wszystkich userHash prefixes
+- Rebuilduje `archive_snapshot` table na podstawie naglowkow (HeaderFirstReader)
+- Cross-ref `observability-and-dr-spec.md` sekcja 7 (DR procedure)
+- Test: zniszcz PG dump, odzyskaj z OVH only -> verify integrity
+
+**HR-10. Migration Weekend (mock -> live OVH)**
+Migracja z `MockSwiftClient` na `OvhSwiftClient` to **dual-write window**:
+1. Tydzien -1: dodaj OvhSwiftClient z mock secondary write (read still from mock)
+2. Migration weekend: copy wszystkie istniejace `mockDir/*` -> OVH (przez `OvhMigrationCopyJob`)
+3. Tydzien +1: flip primary read OVH, mock = secondary
+4. Tydzien +2: usun mock primary (mock zostaje w testach only)
+
+Cross-ref `buffer-core-master-spec.md` HR-3 (immutable) — migration NIE WOLNO usunac danych z mocka.
 
 ---
 

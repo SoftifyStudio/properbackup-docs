@@ -1,9 +1,73 @@
 # Agent VPS — Master Plan (Resilience & Distribution)
 
-Wersja: 1.0 (initial, pre-prod)
+Wersja: 1.1 (initial, pre-prod) — **2026-05-26: dodano sekcje 0 Hard Requirements + odwolanie do `shared-core-architecture-spec.md` (Daniel ack)**
 Repo: `properbackup-agent` + `properbackup-shared` (transport layer)
 Status: SPEC — czeka na implementacje przez kolejnego agenta
 Priorytet: **P1**
+
+---
+
+## 0. Hard Requirements (Immutable Rules) — PRAWO PROJEKTU
+
+> **Te zasady sa NIENARUSZALNE. Wymuszone przez Daniela jako twardy contract dla agenta VPS. Kazde naruszenie = automatic rejection PR-a w review.**
+>
+> Single Source of Truth: `Biznesplan_ProperBackup_v6_AI_Blueprint` (sekcja 2.1 Master Blueprint — "jeden agent KMP, wiele hostow")
+> Architecture foundation: `shared-core-architecture-spec.md` (P0, MUSI byc zaimplementowany PRZED tym specem)
+
+**HR-1. Shared-Core Only (zero duplikacji w agent-vps)**
+Cala logika domenowa agenta (transport, szyfrowanie, scanner, retry, circuit breaker, JWT, throttle) ZYJE w `properbackup-shared`. `properbackup-agent` zawiera WYLACZNIE:
+- `VpsHostAdapter` implementujacy `HostAdapter` interface z shared
+- `AgentMain.kt` jako thin entrypoint: parse args, create adapter, call `core.start()`
+- Specyfike Systemd / Windows Service / launchd / installer
+
+Jezeli czegos brakuje w shared — dodaj do shared (PR do `properbackup-shared`), NIE duplikuj w agent-vps.
+
+**HR-2. JEDEN JAR — cross-host artifact**
+`properbackup-shared/...{version}.jar` MUSI byc identyczny niezaleznie od hosta. `agent-vps` jako konsument ma swoj wlasny `agent-vps-{version}.jar` (dla Systemd) ale uzywa **dokladnie tej samej** wersji shared co `mc-plugin`. Cross-host parity test (`shared-core-architecture-spec.md` SHC-D1) musi przejsc dla kazdego release.
+
+**HR-3. Header-First Verification (egress cost optimization z biznesplanu v6)**
+Przed odczytem pelnego obiektu z OVH agent MUSI uzyc `shared/transport/HeaderFirstReader.kt`:
+- GET ostatnich N bajtow (np. 1024) — header zawiera magic, version, file index
+- Weryfikuj naglowek; dopiero potem download caly obiekt
+- Powod: oszczednosc egress costs na restore (klient placi za kazdy GB egressu)
+
+Implementacja: na restore flow agent NIE WOLNO wolac `ovh.get(full)` bez wczesniejszego `headerFirstReader.peek(objectName)`.
+
+**HR-4. 4MB chunk dedup boundary (juz w shared, NIE ZMIENIAC)**
+`DifferentialScanner.kt` dzieli pliki na chunki 4MB (sha256 per chunk). Agent ZAWSZE konsultuje `ChunkDedupIndex` przed uploadem — jezeli chunk istnieje na buffer-ze (sha256 match), reupload pomijany. NIE wolno zmieniac 4MB boundary (kompatybilnosc backward), nie wolno wylaczac dedupu.
+
+**HR-5. Streaming Encryption (no plaintext na dysku)**
+`ProperCrypto.kt` AES-256-GCM bierze `InputStream` -> `OutputStream` strumieniowo. NIE WOLNO tworzyc temp plikow plaintext po szyfrowaniu. Agent czyta plik -> szyfruje -> wysyla. Wyjatek: tar.gz pack moze byc tymczasowy plik na dysku agent-VPS (jezeli IoThrottle wymaga), ale ZAWSZE w `os.tmpdir()` z atomic cleanup.
+
+**HR-6. JWT 5min lifetime, auto-refresh 4min**
+Agent NIE uzywa static token z `.env`. Bootstrap activation token -> wymienia na **JWT z 5min lifetime** -> auto-refresh co 4 min. Implementacja: `shared/transport/JwtClient.kt`. Bezposrednio wszystkie requesty do buffera (uplaod, telemetria) przez `JwtClient.currentToken()`. Token NIE WOLNO logowac.
+
+**HR-7. Resumable Upload (Content-Range)**
+`shared/transport/ResumableUpload.kt` MUSI obslugiwac:
+- Wznawianie od ostatniego potwierdzonego bajtu (Content-Range request)
+- Idempotency-Key (UUID per upload, cross-ref `buffer-core-master-spec.md` HR-8)
+- Max retry 3 z exponential backoff (1s, 5s, 30s)
+- Po 3 failach -> Circuit Breaker OPEN, czekaj 60s
+- Test: 1GB upload przerywany na 500MB -> resumes od 500MB, nie od 0
+
+**HR-8. Circuit Breaker (3-strike OPEN 60s)**
+`shared/transport/CircuitBreaker.kt`:
+- 3 consecutive HTTP 5xx -> stan OPEN przez 60s
+- W stanie OPEN: zwraca natychmiast `CircuitOpenException`, nie wola network
+- Po 60s: HALF_OPEN, dopuszcza 1 probe request; success -> CLOSED, fail -> OPEN znow
+- Per-buffer-host metrics
+
+**HR-9. IoThrottle 50MB/s (VPS) / 25MB/s (MC)**
+Host deklaruje `capabilities().maxIoBytesPerSec` (cross-ref `shared-core-architecture-spec.md` 5.1):
+- VPS: 50 MB/s read, 25% CPU
+- MC: 25 MB/s read, 15% CPU (shared hosting)
+- Agent uses `min(host.capabilities, user.config)` — user nigdy nie moze podniesc powyzej host limit
+
+**HR-10. Cross-Host Parity Test obowiazkowy**
+`shared/src/jvmTest/.../CrossHostParityTest.kt` MUSI przechodzic dla kazdego PR-a w agent-vps lub shared:
+- Ten sam plik (100MB deterministic) uploaduje sie przez `VpsHostAdapter` i `MockMcHostAdapter`
+- Expected: identyczny SHA-256 final blob na mock-OVH
+- Failure tegoTestu = blok CI = blok release
 
 ---
 

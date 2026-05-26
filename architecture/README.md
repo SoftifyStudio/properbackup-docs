@@ -8,17 +8,20 @@ Ten katalog zawiera kompletna mape dla przyszlych agentow ProperBackup. Kazdy ma
 
 | Priorytet | Master Plan | Zakres | Repozytoria |
 |-----------|-------------|--------|-------------|
+| **P0** (fundament) | [Shared Core Architecture](shared-core-architecture-spec.md) | "Jeden JAR" kontrakt KMP, `HostAdapter` interface, cross-host parity tests, forbidden imports lint — fundament dla agent VPS + MC + future Fabric/Forge | `shared`, `agent`, `mc` |
 | **P0** | [Observability & DR](observability-and-dr-spec.md) | PostgreSQL backup/restore, monitoring, SLO/SLA, runbooki, status page, cost monitoring | `buffer`, `stack`, `docs` |
 | **P0** (billing) | [Master TDD & Resilience Plan](master-tdd-plan.md) | Billing pre-prod hardening: 10 testow A-H, 30+ edge cases, DLQ, agent JWT, ProcessingScreen, dunning, cleanup | `buffer`, `web` |
 | **P1** | [Agent VPS](agent-vps-master-spec.md) | Resumable upload, circuit breaker, IoThrottle 50MB/s, JWT 5min, jlinkDist multi-platform, auto-update | `agent`, `shared` |
 | **P1** | [OVH Cloud Archive Migration](ovh-cloud-archive-migration-spec.md) | Live storage migracja, koszty per GB, cold tier 90d, disaster recovery z OVH, cutover plan | `buffer`, `stack` |
 | **P1** | [CI/CD Release Pipeline](ci-cd-release-pipeline-spec.md) | GitHub Actions per repo, Testcontainers w CI, SemVer/CalVer, release workflow, secret scanning | wszystkie 6 repo |
-| **P1** | [Buffer Core (non-billing)](buffer-core-master-spec.md) | Chunk lifecycle, pack 950MB, ChunkSealer, BudgetGuard/StorageQuotaGuard fail-safe, audit PDF, server lifecycle | `buffer` |
+| **P1** | [Buffer Core (non-billing)](buffer-core-master-spec.md) | Chunk lifecycle, pack 900-950MB STRICT, persistent-first, ChunkSealer, BudgetGuard/StorageQuotaGuard fail-safe, audit PDF | `buffer` |
 | **P2** | [Web Panel (non-subscription)](web-panel-master-spec.md) | Timeline view, 1-Click Restore, Audit PDF download, agent activation UI, monitoring tab, i18n | `web` |
 | **P2** | [Crypto & Compliance](crypto-and-compliance-spec.md) | Audit AES-256-GCM/Argon2id (read-only), RODO art. 32, DPA template, data flow, art. 17 deletion, breach notif | `shared`, `buffer`, `docs/legal/` |
 | **P3** | [Minecraft Plugin](minecraft-plugin-master-spec.md) | Paper/Spigot/Folia lifecycle, world save hooks, `/properbackup activate`, compat matrix, plugin reload safety | `mc` |
 
-Workflow: agent z tych specow startuje czytajac `master-tdd-plan.md` (billing wzor), wybiera plan zgodny ze swoim zadaniem, trzyma sie sekcji DOTYKAJ/NIE RUSZAJ i Workflow Protocol.
+**Hard Requirements (Immutable Rules):** Kazdy spec zawiera sekcje `0. Hard Requirements` na poczatku — to jest **PRAWO PROJEKTU**, nienaruszalne kontrakty potwierdzone przez Daniela. Sa to fundamenty na ktorych stoi cala architektura (jeden JAR KMP, persistent-first buffer, immutable OVH storage, pack 900-950MB strict, header-first verification). Naruszenie HR = automatic rejection PR-a w review. Single Source of Truth: `Biznesplan_ProperBackup_v6_AI_Blueprint`.
+
+Workflow: agent z tych specow startuje czytajac (1) Hard Requirements w sekcji 0, (2) `shared-core-architecture-spec.md` (jezeli pracuje na agencie/MC/shared), (3) wybrany plan zgodny ze swoim zadaniem; trzyma sie sekcji DOTYKAJ/NIE RUSZAJ i Workflow Protocol.
 
 ## Pozostala dokumentacja architektoniczna
 
