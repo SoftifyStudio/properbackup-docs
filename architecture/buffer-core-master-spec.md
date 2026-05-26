@@ -1,9 +1,64 @@
 # Buffer Core (non-billing) — Master Plan
 
-Wersja: 1.0 (initial, pre-prod)
+Wersja: 1.1 (initial, pre-prod) — **2026-05-26: dodano sekcje 0 Hard Requirements (Daniel ack)**
 Repo: `properbackup-buffer` (poza modulami billing/subscription/payment, ktore są w `master-tdd-plan.md`)
 Status: SPEC — czeka na implementacje przez kolejnego agenta
 Priorytet: **P1**
+
+---
+
+## 0. Hard Requirements (Immutable Rules) — PRAWO PROJEKTU
+
+> **Te zasady sa NIENARUSZALNE. Wymuszone przez Daniela jako twardy contract dla buffera. Kazde naruszenie = automatic rejection PR-a w review.**
+>
+> Single Source of Truth: `Biznesplan_ProperBackup_v6_AI_Blueprint` (sekcja 2.1 Master Blueprint — buffer jako write-ahead persistent + immutable storage)
+
+**HR-1. Persistent-First (zero RAM-only)**
+Kazdy bajt klienta wpadajacy do buffera MUSI byc natychmiast utrwalony na dysku (write-ahead persistence). Nie wolno trzymac danych klienta wylacznie w RAM-ie nawet na chwilowy bufor. Powod: crash JVM = utrata danych klienta. Implementacja: `InboxReceiver` zapisuje do `.tmp` -> `fsync` -> `rename` (atomic). Audit log INSERT po commit, nie przed.
+
+**HR-2. Strict pack window 900-950MB (twardy minimum + twardy maksimum)**
+Pack assembler w `flush/PackBuffer.kt` musi przestrzegac:
+- **Minimum strict:** czekaj az nazbiera sie **≥900MB** danych zaszyfrowanych przed flush (zapobiega kosztownym malym packom na OVH).
+- **Maksimum strict:** **≤950MB** po szyfrowaniu (powyzej tego = error, force-flush wczesniej).
+- **Buffer min/max nigdy nie odwracane** — nie pakuj 850MB "bo siedzi za dlugo" bez force-flush logic (HR-7).
+PACK_MIN_BYTES = 900L * 1024 * 1024, PACK_MAX_BYTES = 950L * 1024 * 1024.
+
+**HR-3. Immutable Storage Strategy (OVH = upload + list TYLKO)**
+Buffer NIE WOLNO wolac OVH `.delete(...)` w zadnej scieczce kodu produkcyjnego. CloudStorageClient.delete() w `DevSafetyGuard` MUSI rzucic `SafetyException` w env=production. Klient widzi "deleted" na osi czasu (UI) — to jest **tylko zmiana statusu w bazie**, fizyczny blob na OVH **nie znika nigdy** (do future restore). Cross-ref: `ovh-cloud-archive-migration-spec.md` HR-3.
+
+**HR-4. Test-Driven Development obowiazkowe**
+Kazda zmiana w `inbox/`, `flush/`, `verify/` MUSI byc poprzedzona **red testem** (Testcontainers PostgreSQL — nie H2). Bez red testu = automatic rejection. Cel: 100% coverage critical paths (write-ahead, pack assembly, sealing, restore verify).
+
+**HR-5. Restart Resilience (crash w trakcie pisania do bufora)**
+Kazdy upload chunka musi byc atomic: `.tmp` -> rename -> commit. Po `kill -9` w polowie pisania:
+- Plik `.tmp` zostaje, plik `.final` nie istnieje
+- Restart bufora znajduje `.tmp` i albo: (a) wznawia jezeli ma full body (sprawdz sha256), albo (b) deletes (incomplete).
+- Test integracyjny: `BufferCrashRecoveryTest` z kill -9 mid-write.
+
+**HR-6. Integrity Verification (sha256 przed kazdym przejsciem stanu)**
+- Inbox chunk: sha256 sprawdzany przy odbiorze (Content-SHA256 header) i ponownie przy seal (przed encryption).
+- Pack: sha256 calego pack-pliku zapisany w `buffer_pack.pack_sha256`, sprawdzany przed OVH put.
+- Po OVH put: weryfikacja przez `OvhSwiftClient.headObject().etag` (lub equivalent) — jezeli rozni sie od oczekiwanego sha256, retry + alert.
+
+**HR-7. Force-Flush ("zastoj bufora" guard)**
+Jezeli pack nie osiagnie 900MB w **24 godziny** od pierwszego chunka, system MUSI:
+- Force-flush taka jaka jest (np. 350MB pack)
+- Log warning `pb_pack_force_flush_total{reason="age_24h"}`
+- Alert Slack jezeli force-flush > 3 dziennie (sugestia: czy klient padl)
+Implementacja: cron `flush/ForceFlushCron.kt` co 1h, czytaj `buffer_pack` z `WHERE first_chunk_at < now() - interval '24 hours' AND sealed_at IS NULL`.
+
+**HR-8. Idempotency-Key per upload**
+Kazdy POST do `/inbox/...` MUSI zawierac `Idempotency-Key` header (UUID v4 generowany przez agenta). Buffer trzyma `inbox_idempotency` tabela (idempotency_key, response_status, response_body, created_at, server_id). Powtorzenie tego samego klucza = zwroc cached response. TTL 24h.
+
+**HR-9. At-Rest Encryption (buffer disk = zaszyfrowane przez OS / LUKS)**
+Pliki na dysku w `/storage/inbox/...` i `/storage/sealed/...` to **juz zaszyfrowane przez agenta** AES-256-GCM. Buffer NIE WOLNO operowac na plaintext klienta NIGDY. Jezeli decyzja ma byc inna (np. server-side encryption), zaktualizuj ten dokument PRZED implementacja.
+
+**HR-10. Disk-Full Soft Block + Alert**
+Jezeli buffer storage zaplenia sie powyzej 80% i pack < 900MB:
+- Soft block uploadow od agentow z 503 + `Retry-After: 3600`
+- Alert Slack `pb_disk_full_soft_block`
+- Admin endpoint `/admin/buffer/force-flush-now` (manual override)
+- Cron prubuje force-flush co 30 minut
 
 ---
 

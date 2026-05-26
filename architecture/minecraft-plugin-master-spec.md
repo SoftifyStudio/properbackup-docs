@@ -1,9 +1,96 @@
 # Minecraft Plugin — Master Plan
 
-Wersja: 1.0 (initial, post-MVP placeholder, ready do implementacji)
+Wersja: 1.1 (initial, post-MVP placeholder, ready do implementacji) — **2026-05-26: dodano sekcje 0 Hard Requirements + odwolanie do `shared-core-architecture-spec.md` (Daniel ack)**
 Repo: `properbackup-mc` (aktualnie placeholder — tylko README)
 Status: SPEC — czeka na implementacje przez kolejnego agenta
 Priorytet: **P3** (po stabilizacji core: shared #7 + buffer #13)
+
+---
+
+## 0. Hard Requirements (Immutable Rules) — PRAWO PROJEKTU
+
+> **Te zasady sa NIENARUSZALNE. Wymuszone przez Daniela jako twardy contract dla MC plugin. Kazde naruszenie = automatic rejection PR-a w review.**
+>
+> Single Source of Truth: `Biznesplan_ProperBackup_v6_AI_Blueprint` (sekcja 2.1 Master Blueprint — "jeden JAR agent KMP, MC plugin to thin wrapper")
+> Architecture foundation: `shared-core-architecture-spec.md` (P0, MUSI byc zaimplementowany PRZED tym specem)
+
+**HR-1. Shared-Core Only (zero duplikacji w mc-plugin)**
+Cala logika domenowa agenta (transport, szyfrowanie, scanner, retry, circuit breaker, JWT, throttle) ZYJE w `properbackup-shared`. `properbackup-mc` zawiera WYLACZNIE:
+- `PaperHostAdapter` (implementujacy `HostAdapter` z shared)
+- `ProperBackupPlugin` extends JavaPlugin — wpis onEnable/onDisable
+- `BukkitPlatformFs` (delegacja do `plugin.dataFolder` zamiast `~/.properbackup`)
+- Komendy `/properbackup activate|status|backupnow|help` (cienkie, delegate do `core`)
+- WorldSaveListener — slucha BukkitEvents, woluje `core.runBackupNow()` (lub schedules)
+
+NIE WOLNO duplikowac BufferUploader, ProperCrypto, RetryPolicy, DifferentialScanner w mc-plugin. Jezeli czegos brak w shared — PR do shared.
+
+**HR-2. JEDEN JAR — embedded shared**
+Plugin .jar (shadowJar) BUNDLE shared classes (z `properbackup-shared:${version}` zaleznosc). Ta sama wersja shared co `agent-vps`. Test deployment: ten sam plugin .jar dziala na:
+- Paper 1.21.x (testowane)
+- Spigot 1.21.x (testowane)
+- Folia (testowane, regional schedulers)
+- Bukkit 1.21.x (fallback — chociaz deprecated)
+
+Cross-host parity test (`shared-core-architecture-spec.md` SHC-D1): plugin uplaod identyczny SHA-256 co VPS dla tego samego pliku.
+
+**HR-3. Future Fabric/Forge mods — ten sam shared, inny wrapper**
+Architektura przygotowana dla Fabric mod i Forge mod (post-MVP):
+- `FabricHostAdapter` extends `HostAdapter` — uzywa FabricLoader API
+- `ForgeHostAdapter` extends `HostAdapter` — uzywa Forge ServerEvents
+- KAZDY wrapper to thin layer 50-100 linii, reszta z shared
+
+Decyzja: poczatkowy release tylko Paper/Spigot. Fabric/Forge dodajemy gdy core stabilne (post-launch v1.0).
+
+**HR-4. Plugin Reload Safety**
+Paper/Spigot reload (`/reload`) MUSI byc safe:
+- `onDisable()` woluje `core.stop()` — graceful shutdown JWT refresh, IoThrottle, scheduler
+- Czeka na pending upload max 30s, potem force-kill
+- Po reload: `onEnable()` zaczyna od czystej slade, czyta state z `dataFolder/state.json`
+- Test: MockBukkit symuluje reload — backupy w toku musza dokończyc lub zostac resumes
+
+**HR-5. World Save Hook (post-`/save-all`)**
+WorldSaveListener implementuje `WorldSaveEvent` listener:
+- Po `WorldSaveEvent` (lub manual `/save-all`) -> trigger backup tego konkretnego world dir
+- Per-world configurable: backup co N save event (default 1 = kazdy save)
+- Test: MockBukkit triggers WorldSaveEvent, plugin musi wlasnie wystartowac backup
+
+**HR-6. Activation Token Flow `/properbackup activate <token>`**
+- Komenda parse token z arg
+- Wywoluje `core.activate(token)` z shared
+- Token TRAFIA do `dataFolder/config.yml` (via `BukkitPlatformFs`), NIGDY do `~/.properbackup`
+- Po success: ServerStateStore.persist(serverConfig) — zapisuje server_id, jwt, encryption_key
+
+**HR-7. Performance Budget (shared hosting safe)**
+Host capability `maxIoBytesPerSec = 25 MB/s`, `cpu_percent = 15%` (shared hosting safety).
+- IoThrottle bierze min(host, user_config)
+- BackupOrchestrator schedules backups na cron (default: co 6h, configurable)
+- Brak long-running threads — uzywa Bukkit `runTaskAsynchronously` (NIE `new Thread()`)
+- Memory budget: <100MB working set (shared hosting servers maja czesto 1-2GB RAM total)
+
+**HR-8. Bukkit/Folia Compat Matrix (must-pass)**
+Plugin MUSI byc przetestowany na:
+- Paper 1.20.x, 1.21.x
+- Spigot 1.20.x, 1.21.x
+- Folia 1.21.x (regional schedulers — wykrywa runtime czy Bukkit.isFolia())
+- Bukkit 1.21.x (fallback, not officially supported)
+
+Compat detection w `PaperHostAdapter` runtime:
+- `Bukkit.getServer().javaClass.simpleName` -> identyfikuje host
+- `try { Class.forName("io.papermc.paper.threadedregions.RegionizedServer"); isFolia = true } catch...`
+
+**HR-9. NIE WOLNO modyfikowac shared z mc-plugin PR-a**
+Jezeli plugin potrzebuje czegos czego brak w shared — **stworz PR do `properbackup-shared` FIRST**, wait for merge, THEN PR do mc-plugin uzywajac nowej wersji. NIE WOLNO fork shared, NIE WOLNO patch shared lokalnie.
+
+**HR-10. Cross-Host Parity Test (Daniel mandatory)**
+W CI mc-plugin musi zostac uruchomiony test ktory:
+1. Uruchamia MockBukkit server
+2. Loaduje plugin .jar (shadowed shared)
+3. Plugin aktywuje sie z mock activation token
+4. Upload deterministic 100MB test file
+5. SHA-256 final blob na mock-OVH = expected hash (taki sam jak `agent-vps`)
+6. Failure = blok release
+
+Test live w `properbackup-shared/src/jvmTest/.../CrossHostParityTest.kt` (collocated z VPS test, by gwarantowac identyczna implementacje).
 
 ---
 
