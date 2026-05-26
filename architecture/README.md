@@ -31,3 +31,5 @@ Workflow: agent z tych specow startuje czytajac `master-tdd-plan.md` (billing wz
 | [Subscription Expiration](subscription-expiration-handling.md) | Obsluga wygasania trialu i subskrypcji (UI + backend) |
 | [UI Plan Cards Redesign](ui-plan-cards-redesign.md) | Redesign kart planow: aktywny plan, oszczednosci, brak Best Value |
 | [Legal Withdrawal Waiver](legal-withdrawal-waiver.md) | Klauzula o zrzeczeniu prawa do odstapienia (art. 38 pkt 13) |
+| [Downgrade Logic](downgrade-logic.md) | Logika zmiany planow — max(currentExpiresAt, stripePeriodEnd), 6 scenariuszy, edge cases |
+| [Kody promocyjne](promo-codes.md) | Schemat DB, typy kodow, API, jak dodawac nowe kody |
