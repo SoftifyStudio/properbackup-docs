@@ -257,6 +257,76 @@ Chunk upload protocol (large files, >100MB):
 NIE wysylamy plain sha256 w URLu (privacy). Sha256 jest *po enkrypcji* — nazwa pliku to UUID.
 ```
 
+### 4.4 Restore Protocol (Recovery Mode)
+
+**Single source of truth:** [`user-facing-recovery-spec.md`](user-facing-recovery-spec.md) sekcja 9 (Section C).
+
+Agent obsluguje **full-system recovery** — przywraca caly system serwera do stanu z wybranego snapshota (delete-new + restore-old). Implementacja w `properbackup-shared/restore/` (cross-host parity z MC plugin/Fabric/Forge — cross-ref `shared-core-architecture-spec.md` HR-1).
+
+```
+Flow agenta podczas Recovery Mode:
+
+1. Agent subscribes SSE: GET /sse/agent/<server_id>/stream
+   (orig: backup events; teraz tez recovery commands)
+
+2. Buffer sends `recovery_command:dry_run` via SSE:
+   {sessionId, targetSnapshotId, backupRoots}
+
+3. Agent (RestoreOrchestrator.kt):
+   a. Pobiera snapshot manifest z buffera (sha256 per path)
+   b. Skanuje lokalny fs (reuses DifferentialScanner.kt)
+   c. Oblicza diff (SnapshotDiff.kt):
+      - toRestore: w snapshot, brak/inny sha256 lokalnie
+      - toDelete: lokalnie, brak w snapshot
+      - unchanged: matching sha256
+   d. CriticalPathsGuard filter (whitelist: /proc, /sys, agent config, etc.)
+   e. POST /agent/recovery/<id>/dry_run_result {restored:N, deleted:M, ...}
+
+4. Buffer transitions REQUESTED → PLANNING → AWAITING_USER_CONFIRM
+
+5. UI shows DRY RUN preview; user clicks "Acknowledge + Start"
+
+6. Buffer transitions AWAITING_USER_CONFIRM → THAWING (cold) | READY (hot)
+
+7. Po READY, buffer sends `recovery_command:execute` via SSE:
+   {sessionId}
+
+8. Agent:
+   a. Tworzy pre-recovery snapshot of CURRENT state
+      (uses normal backup loop, oznacza snapshot_type=PRE_RECOVERY)
+   b. POST /agent/recovery/<id>/pre_recovery_done {snapshotId}
+   c. Buffer transitions READY → AGENT_RESTORING
+   d. Per recovery_operation (in order):
+      - DELETE: move file to .quarantine/<recovery_id>/<path_hash>
+      - RESTORE: download chunk + decrypt + atomic write (.tmp → rename)
+      - SKIP: log
+   e. Local state w SQLite (recovery_operations table) → resume-on-crash
+   f. Every 100 ops: POST /agent/recovery/<id>/progress {filesDone:N}
+
+9. Po wszystkich ops:
+   a. Re-scan local fs
+   b. Compute final diff vs target_snapshot
+   c. POST /agent/recovery/<id>/complete {success: true, verify: {...}}
+
+10. Buffer transitions VERIFYING → DONE
+11. .quarantine cleanup scheduled w 30 dni (jezeli no rollback)
+
+Cancel flow:
+- User klika Cancel → buffer sets cancel_requested = true
+- Agent czyta flag co 5s (lub via SSE)
+- Agent stops next operation, runs rollback:
+  - Restore quarantined files (DELETE operations)
+  - Remove newly restored files (RESTORE operations)
+  - State after rollback ~= pre-recovery snapshot
+```
+
+**Forbidden behaviors:**
+- Agent NIGDY nie usuwa plikow z CriticalPathsGuard whitelist
+- Agent NIGDY nie zapisuje plaintext na dysku post-decrypt (streaming write)
+- Agent NIGDY nie kontynuuje recovery bez pre-recovery snapshot success
+
+**Implementacja:** patrz `user-facing-recovery-spec.md` sekcja 9 (FileRestorer, FileDeleter, RestoreOrchestrator).
+
 ---
 
 ## 5. Test Groups

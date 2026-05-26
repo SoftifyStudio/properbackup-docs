@@ -160,30 +160,63 @@ properbackup-web/src/
 └── /processing                       # ProcessingScreen (post-Stripe return)
 ```
 
-### 4.2 Restore flow (1-Click)
+### 4.2 Restore flows (single-file vs full-system Recovery Mode)
+
+ProperBackup ma **dwa odrebne flow restore**:
+
+#### A. Single-file restore (download) — istniejacy
+
+User pobiera pojedynczy plik ze snapshota i decryptuje lokalnie w browserze.
 
 ```
-1. User klika "Restore" przy snapshot w timeline
-2. RecoveryWizard.jsx modal:
-   Step 1: Select destination
-     - Replace original location (default)
-     - Custom path
-   Step 2: Confirm
-     - Show preview: liczba plikow, total size, koszt egress (jezeli OVH cold)
-     - Show ETA (jezeli cold: 4-12h)
-     - Disclaimer: "Backup files override existing"
-   Step 3: Execute
-     - POST /restore/initiate {snapshotId, destination}
-     - Backend creates restore_request
-     - SSE event "restore_started"
-   Step 4: Progress
-     - ThawProgress.jsx (jezeli cold tier)
-     - Real-time progress via SSE
-     - User moze zamknac modal — kontynuje w tle
-   Step 5: Complete
-     - Notification: "Restore complete (3.2 GB, 1247 files)"
-     - Link: "Show in file manager" (tylko Linux/desktop)
+1. User w DirectoryView klika ikone "Download" przy pliku
+2. RecoveryWizard.jsx (existing, 271 linii) — 4-step modal:
+   Step 0: Info ze snapshota (path, date, size)
+   Step 1: Password verify (Argon2id check via verifyPassword)
+   Step 2: ThawProgress.jsx (jezeli cold tier)
+   Step 3: Download + decrypt (decryptAndDownload — local AES-GCM)
+3. Plik ladowany na user disk
 ```
+
+**Status:** Implemented (main branch). Bez zmian w tej iteracji.
+
+#### B. Full-system Recovery Mode (Time-Machine) — NOWE
+
+**Single source of truth:** [`user-facing-recovery-spec.md`](user-facing-recovery-spec.md)
+
+User przywraca CALY system serwera do wybranego snapshot (delete-new + restore-old):
+
+```
+1. User w SnapshotTimeline klika "Restore to this point" przy snapshot
+2. RecoveryConfirmationModal — DRY RUN preview:
+   - 3421 files to restore (3.2 GB)
+   - 89 files to delete (45 MB)
+   - 12458 files unchanged
+   - Sample paths (20 each)
+   - Estimated time
+   - Acknowledge checkbox MANDATORY
+3. User confirms → backend creates recovery_session
+4. State machine (10 stanow): REQUESTED → PLANNING → AWAITING_USER_CONFIRM
+   → THAWING (cold) | READY (hot) → AGENT_RESTORING → VERIFYING → DONE
+5. RecoveryModeOverlay (center-screen, Time-Machine UX):
+   - Progress bar
+   - Current operation
+   - ETA
+   - Cancel button
+6. Per-server lockdown: actions na target server disabled; inne servery OK z warning banner
+7. Pre-recovery snapshot OBOWIAZKOWY: utworzony PRZED AGENT_RESTORING
+   (30-day grace, undo possible)
+8. Cancel anywhere with rollback (uses pre-recovery snapshot)
+9. Audit log every action (RODO + customer trust)
+```
+
+**Status:** Spec done. Implementation w 4 PR-ach (B → C → A → D):
+- Buffer Recovery Session API
+- Agent Restore Protocol (uses `properbackup-shared/restore/`)
+- Frontend Recovery Mode UI
+- E2E Playwright tests + videos
+
+**Patrz:** `user-facing-recovery-spec.md` sekcje 7-10 (per-PR implementation plans).
 
 ### 4.3 Timeline view
 
