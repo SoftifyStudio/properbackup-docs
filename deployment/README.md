@@ -4,6 +4,7 @@ Dokumentacja wdrozeniowa i konfiguracyjna.
 
 | Dokument | Opis |
 |----------|------|
+| [Docker Deployment](docker-deployment.md) | Wdrozenie w kontenerach Docker (docker-compose, nginx, PostgreSQL) + wyniki E2E |
 | [Referencja zmiennych srodowiskowych](env-reference.md) | Kompletna lista env vars z opisami, przykladami i instrukcjami Stripe |
 # Wdrozenie ProperBackup na VPS
 
