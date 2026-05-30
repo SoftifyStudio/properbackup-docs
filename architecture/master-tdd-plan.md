@@ -1863,6 +1863,38 @@ Swiadomie poza scope tego dokumentu (oddzielne plany w przyszlosci):
 
 ---
 
+## Dodatek E — Indeks LLD (odpowiedź na audyt ryzyka)
+
+> Audyt techniczny wskazał, że specy dają świetny high-level design, ale agent
+> potrzebuje **Low-Level Design** (sygnatury, DDL, payloady, niezmienniki), żeby
+> kodować „na krótkiej smyczy". Poniżej mapa nazwanych niezmienników dodanych do
+> każdego spec — agent ma obowiązek je czytać i NIE łamać.
+
+| Spec | Sekcja LLD | Nazwane niezmienniki / kontrakty |
+|------|-----------|----------------------------------|
+| `trial-abuse-prevention.md` | Threat Model v2 | AV-1..AV-7 (wektory ataku), email canonicalization, `signup_fingerprint` DDL |
+| `downgrade-logic.md` | LLD kontrakt metod | I-1..I-5 (`BillingMath.newExpiresAt`, idempotencja) |
+| `subscription-expiration-handling.md` | Access Boundary | `AccessState` FSM, `canRestore`=true zawsze |
+| `promo-codes.md` | atomowa redempcja | `UPDATE ... WHERE used_count < max_uses RETURNING` (anty-TOCTOU) |
+| `stripe-key-isolation.md` | dual-secret webhook | K-1..K-5 (fail-closed bez secret) |
+| `buffer-core-master-spec.md` | Dodatek C | B-1..B-5 (fail-safe, idempotency, async cold) |
+| `agent-vps-master-spec.md` | Dodatek C | A-1..A-5, Circuit Breaker, response→reakcja |
+| `shared-core-architecture-spec.md` | Appendix E | S-1..S-4 (SemVer, pinning, cross-host-parity) |
+| `ovh-cloud-archive-migration-spec.md` | Dodatek E | O-1 (`RestoreState` sealed — wymusza async) |
+| `user-facing-recovery-spec.md` | Appendix E | R-1 (brak częściowego restore z cold) |
+| `crypto-and-compliance-spec.md` | Dodatek C | C-1..C-5 (zero-knowledge, audit hash-chain) |
+| `observability-and-dr-spec.md` | Dodatek D | metryki + alerty per niezmiennik |
+| `ci-cd-release-pipeline-spec.md` | Dodatek D | bramki merge egzekwujące niezmienniki |
+| `web-panel-master-spec.md` | Dodatek C | W-1 (`accessState` jedyne źródło), SSE katalog |
+| `minecraft-plugin-master-spec.md` | Dodatek C | MC-1 (cienki host na `shared`) |
+| `legal-withdrawal-waiver.md` | LLD | L-1 (checkout wymaga utrwalonej zgody) |
+
+**Zasada smyczy:** delegując zadanie agentowi, wskaż konkretny spec + sekcję LLD
++ numery niezmienników, które kod musi spełnić (np. „zaimplementuj redeem promo
+wg `promo-codes.md` §5, niezmienniki anty-TOCTOU"). Nie „napisz system promo".
+
+---
+
 > **Koniec dokumentu.** Wszystkie dalsze zmiany w planie billingu/subskrypcji
 > **musza** byc dodawane jako PR do tego pliku z linkiem do sesji ktora
 > uzasadnia zmiane. Dokumentacja zywa = dokumentacja prawdziwa.

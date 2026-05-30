@@ -20,6 +20,12 @@ Ten katalog zawiera kompletna mape dla przyszlych agentow ProperBackup. Kazdy ma
 | **P2** | [Crypto & Compliance](crypto-and-compliance-spec.md) | Audit AES-256-GCM/Argon2id (read-only), RODO art. 32, DPA template, data flow, art. 17 deletion, breach notif | `shared`, `buffer`, `docs/legal/` |
 | **P3** | [Minecraft Plugin](minecraft-plugin-master-spec.md) | Paper/Spigot/Folia lifecycle, world save hooks, `/properbackup activate`, compat matrix, plugin reload safety | `mc` |
 
+**Low-Level Design (LLD) — odpowiedź na audyt ryzyka:** każdy spec ma teraz
+sekcję LLD (Dodatek/Appendix) z nazwanymi niezmiennikami, sygnaturami metod, DDL
+i payloadami API. Pełny indeks: [Master TDD & Resilience Plan → Dodatek E](master-tdd-plan.md#dodatek-e--indeks-lld-odpowiedź-na-audyt-ryzyka).
+Delegując zadanie agentowi, wskaż konkretny spec + sekcję LLD + numery
+niezmienników, które kod musi spełnić („krótka smycz").
+
 **Hard Requirements (Immutable Rules):** Kazdy spec zawiera sekcje `0. Hard Requirements` na poczatku — to jest **PRAWO PROJEKTU**, nienaruszalne kontrakty potwierdzone przez Daniela. Sa to fundamenty na ktorych stoi cala architektura (jeden JAR KMP, persistent-first buffer, immutable OVH storage, pack 900-950MB strict, header-first verification). Naruszenie HR = automatic rejection PR-a w review. Single Source of Truth: `Biznesplan_ProperBackup_v6_AI_Blueprint`.
 
 Workflow: agent z tych specow startuje czytajac (1) Hard Requirements w sekcji 0, (2) `shared-core-architecture-spec.md` (jezeli pracuje na agencie/MC/shared), (3) wybrany plan zgodny ze swoim zadaniem; trzyma sie sekcji DOTYKAJ/NIE RUSZAJ i Workflow Protocol.
