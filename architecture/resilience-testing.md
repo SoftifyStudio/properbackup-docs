@@ -278,3 +278,24 @@ Pisz:
 > "Napisz pobieranie danych, ale przetestuj sytuacje, w ktorej odpowiedz idzie 10 sekund, a uzytkownik w tym czasie klika w piec innych miejsc. UI nie ma prawa sie rozjechac."
 
 W ten sposob Devin przestanie pisac kod "w ciemno" i zacznie budowac system pancerny.
+
+---
+
+## Mapowanie kategorii → konkretne niezmienniki (LLD)
+
+> 4 kategorie testów odporności mają teraz konkretne, nazwane niezmienniki w
+> specach. Test odpornościowy NIE jest abstrakcyjny — sprawdza konkretny `I-x`/`B-x`/`O-x`.
+
+| Kategoria | Konkretny test (gdzie) |
+|-----------|------------------------|
+| **Awaria zależności** (DB/sieć down) | guardy fail-safe `buffer-core` B-1 (DB down ⇒ blokada); agent Circuit Breaker `agent-vps` C.2 |
+| **Współbieżność / race** | 8-wątkowy `activateSubscription` (`downgrade` I-3); 200-wątkowy redeem promo (`promo-codes` §5) |
+| **Wolne odpowiedzi / timeouty** | async cold restore `ovh` O-1 (Rehydrating, nie timeout); SSE backpressure `web-panel` C.2 |
+| **Nieprawidłowe/wrogie wejście** | `PayloadGuard` magic bytes (`buffer-core` BUF-A2); webhook signature (`trial-abuse` AV-4); SQL injection w nazwie serwera (`buffer-core` 6.16) |
+
+> **Reguła:** każdy nowy niezmiennik (`*-N` w specach) powinien mieć przypisany
+> test z jednej z tych 4 kategorii. Brak testu odpornościowego dla niezmiennika =
+> niezmiennik „na papierze".
+
+Cross-ref: `buffer-core-master-spec.md`, `downgrade-logic.md`, `promo-codes.md`,
+`ovh-cloud-archive-migration-spec.md`, `trial-abuse-prevention.md`.

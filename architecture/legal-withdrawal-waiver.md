@@ -50,3 +50,47 @@ Tekst jest widoczny **bezpośrednio pod kartami planów** na stronie `/account/s
 - `properbackup-web/src/subscription/SubscriptionPage.jsx`
 - `properbackup-web/src/i18n/locales/pl.json`
 - `properbackup-web/src/i18n/locales/en.json`
+
+---
+
+## LLD — utrwalenie zgody (dowód prawny)
+
+> **Luka w obecnej formie:** dokument opisuje *wyświetlenie* klauzuli, ale nie jej
+> **utrwalenie**. Dla obrony prawnej (art. 38 pkt 13) musimy umieć udowodnić, że
+> dany użytkownik wyraził zgodę, kiedy i na jakiej wersji tekstu. Samo
+> wyrenderowanie `<p>` nie jest dowodem.
+
+### 1. Persystencja zgody
+
+```sql
+ALTER TABLE users ADD COLUMN IF NOT EXISTS withdrawal_waiver_at      TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS withdrawal_waiver_version VARCHAR(16);  -- np. 'v1-2026-05'
+```
+
+- `withdrawal_waiver_at` — moment akceptacji (UTC).
+- `withdrawal_waiver_version` — wersja tekstu klauzuli (gdy zmienimy treść, stare
+  zgody zachowują swoją wersję).
+- Dodatkowo wpis w `audit_log` (append-only, hash-chain — patrz
+  `crypto-and-compliance-spec.md` C-5): `{event:"withdrawal_waiver", userId, version, ip, at}`.
+
+### 2. Kontrakt checkoutu (niezmiennik)
+
+> **Niezmiennik L-1:** `createCheckoutSession` jest **odrzucany** (`400
+> WAIVER_REQUIRED`), jeśli `users.withdrawal_waiver_at IS NULL`. Zgoda jest
+> warunkiem koniecznym rozpoczęcia płatnej usługi cyfrowej — egzekwowana po
+> stronie backendu, nie tylko checkbox w UI.
+
+```kotlin
+// StripeHandler.createCheckoutSession(...)
+require(user.withdrawalWaiverAt != null) { throw ApiError("WAIVER_REQUIRED") }
+```
+
+- Zapis zgody następuje przy świadomej akcji użytkownika (klik „Wybierz i zapłać"
+  po wyświetlonej klauzuli), w tej samej transakcji co utworzenie sesji.
+- Wersjonowanie: stała `WAIVER_VERSION` w kodzie; zmiana treści ⇒ bump wersji.
+
+### 3. Cross-references
+
+- `crypto-and-compliance-spec.md` C-5 — `audit_log` append-only (dowód zgody).
+- `subscription-expiration-handling.md` — checkout flow.
+- `stripe-key-isolation.md` — `createCheckoutSession`.
