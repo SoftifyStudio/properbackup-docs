@@ -1126,3 +1126,95 @@ Cleanup cron uruchamia sie codziennie 04:00. DST → 2x w jeden dzien lub 0x.
 - **MachineFileEvent** — append-only event log of file changes
 - **ActivationToken** — single-use credential dla agent registration
 - **Tombstone** — soft-delete marker dla pliku (retencja 30d)
+
+---
+
+## Dodatek C — Kontrakt API + sygnatury (LLD)
+
+> Konsolidacja Low-Level Design: dokładne kontrakty HTTP (request/response/kody),
+> sygnatury kluczowych klas i DDL nowych tabel. Cel: agent implementuje bez
+> zgadywania kształtu payloadu. **Nie powiela** sekcji 5 (test groups) — to
+> jest referencja sygnatur, tamto jest kontraktem testowym.
+
+### C.1 Kontrakt HTTP (agent ↔ buffer)
+
+Wszystkie endpointy agentowe wymagają `Authorization: Bearer <JWT>`. Body binarne
+ma nagłówek z magic bytes + wersją (walidowany przez `PayloadGuard`).
+
+| Endpoint | Metoda | Request | Sukces | Błędy |
+|----------|--------|---------|--------|-------|
+| `/inbox/{userId}/{pathId}` | POST | binarny chunk + `X-Original-Path`, `X-Sha256`, `Idempotency-Key`, opc. `Content-Range` | `200 {"chunkId":"<uuid>"}` | `400 INVALID_PAYLOAD`, `401`, `403 QUOTA_EXCEEDED`, `507 DISK_FULL` |
+| `/servers` | POST | `{"name":"My VPS"}` | `201 {"serverId":"...","activationToken":"..."}` | `401`, `409 NAME_TAKEN` |
+| `/servers/{id}` | PATCH | `{"name":"..."}` | `200` | `404`, `409` |
+| `/servers/{id}` | DELETE | — | `202` (soft-delete, tombstone) | `404` |
+| `/agent/activate` | POST | `{"token":"<activation>"}` | `200 {"jwt":"...","serverId":"..."}` | `400 TOKEN_USED`, `404 TOKEN_INVALID` |
+| `/agent/metrics` | POST | `{"cpu":[...],"ramMb":..,"diskPct":..}` | `204` | `401` |
+| `/snapshots?serverId=&pathId=` | GET | query | `200 [{snapshot}]` | `401` |
+| `/sse/events` | GET | `Last-Event-ID` opc. | `200 text/event-stream` | `401` |
+
+```jsonc
+// archive_snapshot (response item)
+{ "snapshotId": "...", "pathId": "x7a3b2c9", "originalPath": "/home/u/f.txt",
+  "packName": "pack_2026...", "ovhKey": "...", "sizeBytes": 12345,
+  "sha256": "...", "tier": "hot", "sealedAt": "2026-05-24T14:32:00Z" }
+```
+
+> **Niezmiennik kontraktu:** odpowiedzi błędów ZAWSZE mają kształt
+> `{"code":"<UPPER_SNAKE>","message":"..."}`. Kody w tabeli powyżej są stabilne
+> (agent na nie reaguje — np. `DISK_FULL`/`507` → backoff, nie retry natychmiast).
+
+### C.2 Sygnatury kluczowych klas
+
+```kotlin
+interface CloudStorageClient {
+    fun put(objectName: String, data: ByteArray): PutResult     // idempotentny po objectName
+    fun get(objectName: String): ByteArray                      // dla restore (patrz OVH spec: cold tier async)
+    fun head(objectName: String): ObjectMeta?
+    fun delete(objectName: String)                              // używany TYLKO przez lifecycle, nie business
+}
+
+class PackBuffer(private val maxPackBytes: Long = 950L * 1024 * 1024) {
+    /** Dodaje chunk; zwraca true gdy pack przekroczył próg i wymaga seal. */
+    fun addToPack(chunk: InboxChunk): Boolean
+    fun openPackSize(userId: String): Long
+}
+
+class ChunkSealer(private val storage: CloudStorageClient, private val crypto: ProperCrypto) {
+    /** Pakuje + szyfruje + wysyła + INSERT archive_snapshot/archive_chunk + SSE. Idempotentny po packName. */
+    fun seal(userId: String, serverId: String): SealResult
+}
+
+// Guardy — KONTRAKT FAIL-SAFE: przy DB unavailable -> blokuj (zwróć false / rzuć), NIGDY nie przepuszczaj.
+interface Guard { fun check(ctx: GuardCtx): GuardDecision }   // BudgetGuard, StorageQuotaGuard, DiskGuard, PayloadGuard
+```
+
+### C.3 DDL nowych tabel (CREATE TABLE — TYLKO dodawaj)
+
+```sql
+CREATE TABLE IF NOT EXISTS inbox_idempotency (
+    idempotency_key VARCHAR(128) PRIMARY KEY,
+    user_id         VARCHAR(36) NOT NULL,
+    path_id         CHAR(8) NOT NULL,
+    sha256          CHAR(64) NOT NULL,
+    chunk_uuid      UUID NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);  -- BUF-A1 idempotency: drugi POST tego samego key => zwróć istniejący chunkId
+
+CREATE TABLE IF NOT EXISTS verify_sample_log (
+    id          BIGSERIAL PRIMARY KEY,
+    pack_name   VARCHAR(128) NOT NULL,
+    sampled_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    result      VARCHAR(16) NOT NULL,   -- ok | corrupt | unavailable
+    detail      TEXT
+);  -- PeriodicVerifier: sample 1% chunków (BUF-F2)
+```
+
+### C.4 Niezmienniki (agent NIE może ich złamać)
+
+| # | Niezmiennik | Cross-ref |
+|---|-------------|-----------|
+| B-1 | Guardy są **fail-safe**: DB down ⇒ blokada, nigdy fail-open | §3, `[BUF-A3/A4]` |
+| B-2 | `archive_snapshot`/`archive_chunk` są **immutable** — brak UPDATE/DELETE poza lifecycle | HR (sekcja 0) |
+| B-3 | `pathId` pseudonimizuje ścieżkę — plain path NIGDY w logach/objectName | §4.2 |
+| B-4 | Sealing i POST /inbox są **idempotentne** (packName / Idempotency-Key) | C.1, C.3 |
+| B-5 | `get()` z OVH może być **asynchroniczny** (cold tier) — patrz OVH spec, nie traktuj jak S3 | `ovh-cloud-archive-migration-spec.md` |
