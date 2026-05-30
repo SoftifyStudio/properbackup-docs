@@ -149,3 +149,74 @@ Po przelaczeniu:
 - UI automatycznie wyswietla "Live" zamiast "Test Mode"
 - Nastepny checkout tworzy nowego customera w live Stripe
 - Stary test customer pozostaje (mozna wrocic na test)
+
+---
+
+# LLD — sygnatury, niezmienniki i webhook dual-secret
+
+> Sekcja referencyjna dla agenta. `StripeKeyProvider` to JEDYNE miejsce z dostepem
+> do surowych kluczy. Kazda metoda biznesowa dostaje opaque `RequestOptions`.
+
+## 1. Sygnatury `StripeKeyProvider`
+
+```kotlin
+class StripeKeyProvider(env: Map<String, String>, private val users: UserStore) {
+    // Klucze ladowane RAZ w konstruktorze; przechowywane w prywatnych polach.
+    // Log przy starcie: TYLKO prefix(8) kazdego klucza, nigdy pelna wartosc.
+
+    /** Per-request opcje z poprawnym secret key wg trybu usera. */
+    fun requestOptionsFor(userId: String): RequestOptions
+
+    fun isTestMode(userId: String): Boolean
+    fun publicKeyFor(userId: String): String          // do frontendu (Checkout.js)
+    fun priceId(plan: Plan, mode: StripeMode): String  // z stripe_price_config
+
+    /** Dual-secret: probuje test, potem live. Rzuca SignatureVerificationException jesli oba nie pasuja. */
+    fun verifyWebhook(payload: String, sigHeader: String): Event
+}
+
+enum class StripeMode { TEST, LIVE }
+```
+
+## 2. Niezmienniki bezpieczenstwa (agent NIE moze ich zlamac)
+
+| # | Niezmiennik | Test ochronny |
+|---|-------------|---------------|
+| K-1 | `Stripe.apiKey` (global static) NIGDY nie ustawiany — tylko per-request `RequestOptions` | grep `Stripe.apiKey =` => 0 trafien |
+| K-2 | Pelny klucz NIE trafia do logow — tylko `prefix(8)` | test loggera: brak `sk_live_`/`sk_test_` w outpucie |
+| K-3 | Brak webhook secret => `503` (fail-closed), NIE przetwarzaj | start bez `STRIPE_*_WEBHOOK_SECRET` => endpoint 503 |
+| K-4 | `cancelExistingStripeSubscription` operuje wylacznie na ID z aktualnego trybu | flip test→live nie probuje cancelowac test sub przez live API |
+| K-5 | Live prices lazy (przy 1. live checkout) — start bez `STRIPE_LIVE_*` nie crashuje | boot z samym test keys => OK |
+
+## 3. Webhook dual-secret — algorytm
+
+```kotlin
+fun verifyWebhook(payload: String, sig: String): Event {
+    for (secret in listOf(testWebhookSecret, liveWebhookSecret)) {   // test pierwszy
+        if (secret == null) continue
+        try { return Webhook.constructEvent(payload, sig, secret) }
+        catch (e: SignatureVerificationException) { /* probuj nastepny */ }
+    }
+    throw SignatureVerificationException("no matching secret", sig)   // -> handler zwraca 400
+}
+```
+
+- Po sukcesie: idempotencja po `event.id` (tabela `processed_stripe_event`,
+  patrz `trial-abuse-prevention.md` §6) zanim cokolwiek zmutujesz.
+- `mode` zdarzenia wynika z tego, ktory secret zadzialal — zapisz do kontekstu,
+  by mapowac na `stripe_customer_id` vs `stripe_live_customer_id`.
+
+## 4. Macierz trybu → kolumna
+
+| Operacja | `stripe_test_mode=TRUE` | `stripe_test_mode=FALSE` |
+|----------|--------------------------|---------------------------|
+| customer id | `stripe_customer_id` | `stripe_live_customer_id` |
+| subscription id | `stripe_subscription_id` | `stripe_live_subscription_id` |
+| price id | `stripe_price_config(plan,'test')` | `stripe_price_config(plan,'live')` |
+| secret key | `STRIPE_TEST_SECRET_KEY` | `STRIPE_LIVE_SECRET_KEY` |
+
+## 5. Cross-references
+
+- `downgrade-logic.md` — payloady webhookow, mapowanie `customer`→`userId`.
+- `trial-abuse-prevention.md` §6 — idempotencja `event.id`, allowlist typow.
+- `deployment/env-reference.md` — pelna lista zmiennych srodowiskowych Stripe.

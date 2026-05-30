@@ -165,3 +165,95 @@ Możliwe `reason`:
 | `FLAT-500` | fixed | 5.00 PLN | wszystkie | 100 |
 | `ANNUAL-30` | percentage | 30% | roczny | 100 |
 | `FIRST-FREE` | first_order | 100% | miesięczny | 100 |
+
+---
+
+# LLD — atomowa redempcja, race conditions i abuse
+
+> Sekcja referencyjna dla agenta. `validate-promo` jest tylko podglądem — prawdziwa
+> redempcja (inkrementacja `used_count` + zapis `promo_code_usage`) MUSI być atomowa,
+> bo inaczej kod z `max_uses=100` da się wykorzystać 200× przy współbieżności.
+
+## 1. Atomowa redempcja (anty-race)
+
+**Zły wzorzec (TOCTOU):** `SELECT used_count` → sprawdź `< max_uses` → `UPDATE +1`.
+Dwa równoległe checkouty przeczytają tę samą wartość i oba przejdą.
+
+**Dobry wzorzec — warunkowy UPDATE w jednej instrukcji:**
+
+```sql
+-- Redempcja: zwraca 1 wiersz tylko jeśli limit nie wyczerpany. Inkrementacja warunkowa.
+UPDATE promo_code
+   SET used_count = used_count + 1
+ WHERE code = ?
+   AND active = TRUE
+   AND (expires_at IS NULL OR expires_at > now())
+   AND used_count < max_uses
+RETURNING id, type, discount_percent, discount_grosz, applicable_plan;
+-- 0 wierszy => kod wyczerpany/nieaktywny/wygasł => odrzuć checkout
+```
+
+```sql
+-- Per-user limit (one_time): unikalny indeks robi robotę, łapiemy wyjątek.
+INSERT INTO promo_code_usage (promo_code_id, user_id, stripe_session)
+VALUES (?, ?, ?);
+-- ON CONFLICT (promo_code_id, user_id) DO NOTHING => already_used_by_user
+```
+
+> **Kolejność i transakcja:** redempcja odbywa się dopiero przy potwierdzonej
+> płatności (`checkout.session.completed`), w **tej samej transakcji** co
+> `activateSubscription`. Jeśli płatność padnie — rollback cofa `used_count`.
+> `validate-promo` (preview) NIGDY nie inkrementuje.
+
+## 2. Sygnatury
+
+```kotlin
+sealed interface PromoResult {
+    data class Valid(val code: String, val type: PromoType, val discountGrosze: Long, val applicablePlan: Plan?) : PromoResult
+    data class Invalid(val reason: String) : PromoResult   // not_found_or_expired | not_eligible_first_order | already_used_by_user | code_required
+}
+
+class PromoService(private val ds: DataSource) {
+    /** Bez side-effectu. Czyta stan + sprawdza eligibility usera. */
+    fun validate(code: String, userId: String, plan: Plan): PromoResult
+
+    /** Side-effect: atomowa inkrementacja + INSERT usage. W transakcji checkoutu. */
+    fun redeem(conn: Connection, code: String, userId: String, plan: Plan, stripeSession: String): PromoResult
+}
+```
+
+## 3. Stacking / interakcja z proracją
+
+- **Kolejność:** `cena_bazowa → proration (downgrade-logic) → promo`. Promo liczone
+  od ceny **po proracji**.
+- **Clamp:** `suma_rabatów = min(cena_bazowa, proration + promo)` — nigdy poniżej `0`.
+- **first_order:** eligible tylko gdy `users.ever_subscribed = FALSE` (jeden SELECT
+  w `validate`/`redeem`); spójne z `trial-abuse-prevention.md`.
+- **Brak łączenia wielu kodów:** jeden kod per checkout (frontend wysyła max 1 `code`).
+
+## 4. Wektory abuse i obrona
+
+| Wektor | Obrona |
+|--------|--------|
+| Współbieżny checkout > `max_uses` | warunkowy `UPDATE ... WHERE used_count < max_uses RETURNING` (§1) |
+| Ten sam user redeemuje `one_time` 2× | unikalny indeks `uq_promo_usage_per_user` + `ON CONFLICT DO NOTHING` |
+| `first_order` po wcześniejszej subskrypcji | guard `ever_subscribed = FALSE` |
+| Redempcja bez płatności (porzucony checkout) | redempcja dopiero w `checkout.session.completed`, w transakcji |
+| Brute-force zgadywanie kodów | rate-limit na `/validate-promo` (np. 10/min/IP) + brak rozróżnienia `not_found` od `expired` |
+| 100% promo + proration → kwota ujemna | clamp `coerceAtLeast(0)`; Stripe min. kwota → fallback na `customer.balance` |
+
+## 5. Testy akceptacyjne (TDD, Testcontainers)
+
+| Test | Oczekiwanie |
+|------|-------------|
+| 200 wątków redeem kodu `max_uses=100` | dokładnie 100 sukcesów, 100 `not_found_or_expired` |
+| `one_time` ten sam user 2× | drugi → `already_used_by_user`, brak 2. wiersza usage |
+| `first_order` user z `ever_subscribed=TRUE` | `not_eligible_first_order` |
+| płatność faila po redeem | rollback → `used_count` bez zmian |
+| promo 30% na annual po proracji 300d | rabat ≤ cena planu, brak wartości ujemnej |
+
+## 6. Cross-references
+
+- `downgrade-logic.md` — proration `capped + overflow`, transakcyjność checkoutu.
+- `subscription-expiration-handling.md` §3 — kolejność proration ↔ promo.
+- `trial-abuse-prevention.md` — `ever_subscribed`, rate-limit endpointów.
