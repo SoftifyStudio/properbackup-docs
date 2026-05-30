@@ -23,6 +23,17 @@ Directory: `2026-05-26-fixes/`
 | 9 | `test09-expiry.webm` | Wygaśnięcie → API `active:false`, UI expired | 1.1m | PASS |
 | 10 | `test10-payment-failure.webm` | Odmowa płatności → **past_due z grace period** (yellow banner) | 1.3m | PASS |
 
+## Videos (2026-05-30 — recovery restore)
+
+Directory: `2026-05-30-recovery/`
+
+| # | File | Test | Time | Status |
+|---|------|------|------|--------|
+| 1 | `test01-recovery-restore.webm` | UI download → AES-256-GCM decrypt → tar xzf → SHA-256 = oryginał (`c985a725…dbe32`) | 11s | PASS |
+
+Test 1 (API restore) + Test 2 (UI restore) oba zielone 2× pod rząd. Natywne wideo Playwright (nie nagrywanie ekranu Devina).
+Test code: [`properbackup-web/tests/e2e/recovery-e2e.spec.js`](https://github.com/SoftifyStudio/properbackup-web/tree/main/tests/e2e/recovery-e2e.spec.js)
+
 ### Key fixes in this run vs previous:
 - **Test 7:** Backend now blocks Account B via card fingerprint validation in PostgreSQL + `abuse_blocked` flag in `activateSubscription` transaction
 - **Test 10:** Backend sets `past_due` status + 7-day grace period instead of immediate lockout. Frontend shows yellow warning banner.
