@@ -846,3 +846,85 @@ Net margin Hobby: ~13 PLN/user/mies (~85%)
 - **Egress** — outbound traffic, OVH liczy oddzielnie od storage
 - **Backfill** — historic data migration to new backend
 - **Cutover** — moment flipnięcia feature flag z mock na ovh
+
+---
+
+## Dodatek E — LLD: asynchroniczny restore (odpowiedź na audyt ryzyka #2)
+
+> **Kontekst audytu:** „AI pisząc logikę restore może potraktować Cold Archive jak
+> szybki dysk (S3 Standard) i kod wywali timeout przy natychmiastowym pobraniu."
+> Ta sekcja czyni asynchroniczność **wymuszoną przez typy i kontrakt API** — nie
+> da się napisać synchronicznego restore z cold, bo `get()` zwraca stan, nie bajty.
+
+### E.1 Typowany kontrakt storage (asynchroniczność wbudowana w API)
+
+```kotlin
+sealed interface RestoreState {
+    data class Ready(val bytes: ByteArray) : RestoreState        // hot tier — natychmiast
+    data class Rehydrating(val etaAt: Instant) : RestoreState    // cold/frozen — czekaj
+    data object NotFound : RestoreState
+}
+
+interface ArchiveRetriever {
+    /** NIGDY nie blokuje na godziny. Cold tier => Rehydrating(eta), nie wyjątek/timeout. */
+    fun requestObject(objectName: String): RestoreState
+    fun pollObject(objectName: String): RestoreState             // wołane przez cron
+}
+```
+
+> **Niezmiennik O-1:** Warstwa biznesowa NIE woła „pobierz bajty teraz". Woła
+> `requestObject` → jeśli `Rehydrating`, zapisuje `restore_request` i zwraca
+> `202`. Bajty pobiera dopiero gdy `pollObject` → `Ready`. Brak ścieżki kodu,
+> która zakłada synchroniczny odczyt z cold.
+
+### E.2 `RestoreOrchestrator` — sygnatury
+
+```kotlin
+class RestoreOrchestrator(private val retriever: ArchiveRetriever, private val sse: SseBroadcaster) {
+    /** Idempotentny po (userId, objectName): drugi request reużywa pending. */
+    fun requestRestore(userId: String, objectName: String): RestoreRequest
+    /** Cron co ~5 min: HEAD object, aktualizuje status, SSE notify gdy ready. */
+    fun pollPending()
+    /** Bulk (1-Click folder): max 10 równoległych rehydracji per user (throttle). */
+    fun requestBulk(userId: String, objectNames: List<String>): List<RestoreRequest>
+}
+```
+
+### E.3 DDL `restore_request`
+
+```sql
+CREATE TABLE IF NOT EXISTS restore_request (
+    id            BIGSERIAL PRIMARY KEY,
+    user_id       VARCHAR(36) NOT NULL,
+    object_name   VARCHAR(256) NOT NULL,
+    status        VARCHAR(16) NOT NULL DEFAULT 'pending',  -- pending | ready | expired | failed
+    eta_at        TIMESTAMPTZ,                              -- now() + ~4h (cold)
+    requested_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ready_at      TIMESTAMPTZ,
+    expires_at    TIMESTAMPTZ                               -- ready_at + 3 dni (okno downloadu)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_restore_pending
+    ON restore_request(user_id, object_name) WHERE status = 'pending';  -- idempotencja
+```
+
+### E.4 Kontrakt HTTP restore
+
+| Endpoint | Sukces (hot) | Sukces (cold) | Polling |
+|----------|--------------|---------------|---------|
+| `POST /restore` `{objectName}` | `200 {url}` (presigned) | `202 {restoreId, etaAt, status:"rehydrating"}` | klient/UI poll `GET /restore/{id}` |
+| `GET /restore/{id}` | `200 {status:"ready", url}` | `200 {status:"pending", etaAt}` | po `ready` → download |
+
+### E.5 Edge cases (uzupełnienie LLD)
+
+| Sytuacja | Reguła |
+|----------|--------|
+| Podwójny request tego samego obiektu | idempotencja: reużyj `pending` (uq index) |
+| Lifecycle re-pakuje obiekt w trakcie restore | aplikacyjny lock przez `restore_request` blokuje retransition (patrz §6.5); ew. OVH `restore-period` |
+| Rehydracja nie kończy się w 7 dni | cron flaguje `expired`, SSE notify „retry"; patrz `user-facing-recovery-spec.md` §6.5 |
+| Bulk > 10 obiektów | kolejka, max 10 równoległych per user (egress/throttle) |
+
+### E.6 Cross-references
+
+- `buffer-core-master-spec.md` C.2/B-5 — `CloudStorageClient.get()` może być async.
+- `user-facing-recovery-spec.md` — stan `THAWING`, ThawProgress UI, timeouty 8h/7d.
+- `observability-and-dr-spec.md` — alert na zaległe `restore_request`.

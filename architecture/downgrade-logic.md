@@ -103,3 +103,61 @@ Mechanizm `capped + overflow` w `calculateProratedDiscount` poprawnie obsluguje 
 
 - `properbackup-buffer#21` — backend (activateSubscription max() + handleSubscriptionDeleted + SELECT FOR UPDATE + retry)
 - `properbackup-web#30` — frontend (usuniety downgrade guard + bfcache fix)
+
+---
+
+# LLD — kontrakt metod i niezmienniki
+
+> Sekcja referencyjna dla agenta: dokladne sygnatury, payloady webhookow i
+> niezmienniki, ktore MUSZA byc utrzymane przy kazdej zmianie logiki billingu.
+> Cala arytmetyka dat odbywa sie w UTC (`Instant`), porownania zawsze `isAfter`.
+
+## Sygnatury (StripeHandler / UserStore)
+
+```kotlin
+// Wszystkie metody mutujace subskrypcje dzialaja w JEDNEJ transakcji z SELECT FOR UPDATE.
+class StripeHandler(private val users: UserStore, private val keys: StripeKeyProvider) {
+
+    /** Idempotentne. newExpiresAt = max(currentExpiresAt, stripePeriodEnd). NIGDY nie skraca. */
+    fun activateSubscription(conn: Connection, userId: String, plan: Plan, stripePeriodEnd: Instant)
+
+    /** CRITICAL: jezeli expiresAt > now -> czysci TYLKO stripe_subscription_id (zachowuje oplacony czas). */
+    fun handleSubscriptionDeleted(conn: Connection, userId: String, stripeSubId: String)
+}
+
+object BillingMath {
+    /** Jedyne zrodlo prawdy dla "nigdy nie skracaj". */
+    fun newExpiresAt(current: Instant?, stripePeriodEnd: Instant): Instant =
+        if (current != null && current.isAfter(stripePeriodEnd)) current else stripePeriodEnd
+}
+```
+
+## Niezmienniki (invariants) — agent NIE moze ich zlamac
+
+| # | Niezmiennik | Test ochronny |
+|---|-------------|---------------|
+| I-1 | `subscription_expires_at` nigdy nie maleje w wyniku zmiany planu | downgrade annual(300d)→monthly => +300d |
+| I-2 | `handleSubscriptionDeleted` przy `expiresAt > now` nie kasuje planu ani daty | cancel po 2 dniach => dostep do konca okresu |
+| I-3 | Kazda mutacja subskrypcji trzyma `SELECT FOR UPDATE` na wierszu usera | 8-watkowy concurrent activate => brak utraty zapisu |
+| I-4 | Webhooki sa idempotentne po `event.id` | duplikat `subscription.deleted` => no-op |
+| I-5 | Brak crona wygasajacego — dostep liczony lazy `expiresAt > now` per request | brak background mutacji stanu |
+
+## Payloady webhookow (pola wymagane do decyzji)
+
+```jsonc
+// customer.subscription.deleted (skrot)
+{ "id": "evt_...", "type": "customer.subscription.deleted",
+  "data": { "object": { "id": "sub_...", "customer": "cus_...",
+                        "current_period_end": 1790000000 } } }
+```
+
+- `current_period_end` (epoch s) → `stripePeriodEnd`. **Nigdy** nie ufamy polom payloadu
+  do skracania daty — sluza tylko do `max()`.
+- Mapowanie `customer`/`sub_` → `userId` przez `stripe_(live_)?customer_id` (patrz
+  `stripe-key-isolation.md`).
+
+## Cross-references
+
+- `subscription-expiration-handling.md` — stany trial/sub i proration.
+- `trial-abuse-prevention.md` §6 — weryfikacja podpisu i idempotencja webhookow.
+- `promo-codes.md` — interakcja rabatu z proracja.

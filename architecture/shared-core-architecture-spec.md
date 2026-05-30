@@ -899,3 +899,71 @@ Kazda zmiana w konsumencie (`agent-vps`, `mc-plugin`):
 - Stripe billing (`master-tdd-plan.md`)
 - OVH migration (`ovh-cloud-archive-migration-spec.md`)
 - Web UI (`web-panel-master-spec.md`)
+
+---
+
+## 18. Appendix E — LLD: wersjonowanie i kontrakt regresji (odpowiedź na audyt ryzyka #3)
+
+> **Kontekst audytu:** „Agent naprawiając błąd w VPS może zmodyfikować shared core
+> tak, że wysypie kompilację buffera/MC." Ta sekcja zamienia HR-1..HR-10 w
+> **operacyjny kontrakt wersjonowania**: shared traktujemy jak **niemodyfikowalną,
+> wersjonowaną bibliotekę**, a każda zmiana przechodzi bramkę cross-host parity.
+
+### 18.1 SemVer — polityka
+
+`properbackup-shared` publikuje artefakt `shared-<MAJOR>.<MINOR>.<PATCH>`:
+
+| Zmiana | Bump | Przykład |
+|--------|------|----------|
+| Nowa metoda/pole opcjonalne, zachowane sygnatury | **MINOR** | nowy `HeaderFirstReader.peek()` |
+| Bugfix bez zmiany kontraktu | **PATCH** | poprawka retry backoff |
+| Zmiana/usunięcie publicznej sygnatury, zmiana formatu blobu/DTO | **MAJOR** | zmiana `BufferUploader.upload(...)` |
+
+> **Złota zasada:** zmiana, która łamie kompilację KTÓREGOKOLWIEK konsumenta =
+> **MAJOR** i wymaga skoordynowanego release wszystkich hostów. Agent NIE robi
+> takiej zmiany „przy okazji" fixa — to osobny, świadomy PR z migracją konsumentów.
+
+### 18.2 Pinning i konsumpcja
+
+```kotlin
+// gradle: konsument pinuje DOKŁADNĄ wersję (brak '+', brak 'latest.release')
+dependencies { implementation("pl.danielniemiec:properbackup-shared:1.4.2") }
+```
+
+- Konsumenci pinują dokładną wersję (reprodukowalność buildów).
+- Bump wersji u konsumenta to świadomy commit, nie auto-update.
+- `shared` eksportuje stałą `SharedVersion.VALUE` — buffer loguje wersję każdego
+  podłączonego agenta (telemetria), by wykryć rozjazd w flocie.
+
+### 18.3 Protokół zmiany w shared (obowiązkowy dla agenta)
+
+```
+1. Zmiana potrzebna? Czy NA PEWNO w shared (HR-2)? Jeśli to host-specific → do konsumenta.
+2. Klasyfikuj bump (18.1). MAJOR → zatrzymaj się, zgłoś Danielowi (skoordynowany release).
+3. Red-first test w shared (HR-10: mockuj tylko HostAdapter/PlatformFs).
+4. Uruchom `cross-host-parity` (HR-9): agent-vps + MC (MockBukkit) ładują NOWY JAR,
+   uploadują ten sam 100MB plik → identyczny SHA-256 blob w mock-OVH.
+5. Zielony parity = warunek konieczny mergu. Czerwony u JEDNEGO hosta = blok.
+6. Bump SemVer + zaktualizuj pin u WSZYSTKICH konsumentów w tym samym release.
+```
+
+### 18.4 Bramka regresji w CI (egzekwowanie)
+
+| Bramka | Warunek przejścia | Realizuje HR |
+|--------|--------------------|--------------|
+| `compile-all-consumers` | agent-vps + mc-plugin kompilują się z nowym `shared` JAR | HR-1, HR-2 |
+| `cross-host-parity` | identyczny blob SHA-256 ze wszystkich hostów dla 100MB pliku | HR-4, HR-9 |
+| `forbidden-imports` | konsument nie importuje wewnętrznych pakietów shared poza kontraktem | HR-2 |
+| `format-compat` | magic bytes + wersja formatu blobu niezmienione (lub MAJOR bump) | HR-5, HR-7 |
+
+> Patrz `ci-cd-release-pipeline-spec.md` (CICD-G) — konkretne joby. Dopóki bramka
+> `cross-host-parity` nie jest zielona, **żaden** PR dotykający shared nie wchodzi.
+
+### 18.5 Niezmienniki
+
+| # | Niezmiennik | Cross-ref |
+|---|-------------|-----------|
+| S-1 | Zmiana łamiąca kompilację konsumenta = MAJOR + skoordynowany release | 18.1, 18.3 |
+| S-2 | Konsumenci pinują dokładną wersję (brak auto-update) | 18.2 |
+| S-3 | Merge do shared niemożliwy bez zielonego `cross-host-parity` | 18.4, HR-9 |
+| S-4 | Format blobu (magic bytes/wersja) stabilny w obrębie MAJOR | HR-5, HR-7 |

@@ -1671,3 +1671,37 @@ Każda z 4 nastepnych PR-ow ma wlasne DoD w odpowiedniej sekcji powyzej. Wymagan
 | 2026-05-26 | Recovery Mode UI = center-screen overlay | Time Machine inspired; user wie ze "system w trybie specjalnym" |
 | 2026-05-26 | E2E test count = 8 | Cover happy + cancel + concurrent + edge cases bez over-testing |
 | 2026-05-26 | Webm video format dla testow | Playwright native, zgodne z konwencja `e2e-videos/` |
+
+---
+
+## 20. Appendix E — LLD: cross-spec invariants (kontrakt dla agenta)
+
+> Recovery dotyka WSZYSTKICH warstw (UI, buffer, agent, shared, OVH). Ta tabela
+> spina niezmienniki z pozostałych speców, żeby agent nie złamał ich „od strony
+> recovery". Każdy wiersz ma test ochronny w odpowiednim specu.
+
+| Niezmiennik | Źródło | Znaczenie dla recovery |
+|-------------|--------|------------------------|
+| `canRestore` ZAWSZE `true` (anti-hostage) | `subscription-expiration-handling.md` §2 | restore działa nawet w `LOCKED_EXPIRED` — wygaśnięcie nie blokuje odzyskania danych |
+| Async cold restore (O-1: `get()` zwraca stan, nie bajty) | `ovh-cloud-archive-migration-spec.md` E.1 | stan `THAWING` mapuje 1:1 na `restore_request.status=pending`; UI poll po `etaAt` |
+| Upload/restore resumowalny po crashu (A-4) | `agent-vps-master-spec.md` C.4 | agent wznawia full-system restore od pierwszego pliku `!= DONE` |
+| Cross-host parity (HR-4) | `shared-core-architecture-spec.md` | ten sam blob odtwarza się identycznie na VPS i MC |
+| Pre-recovery snapshot 30-day grace + quarantine | sekcja 5 (ten spec) | rollback możliwy po `cancel`; quarantine ≠ permanent delete |
+
+### 20.1 Mapowanie stanów recovery ↔ tabele
+
+```
+RecoverySession.state = THAWING   <-> restore_request.status = pending  (eta_at)
+RecoverySession.state = READY     <-> restore_request.status = ready    (expires_at = ready_at + 3d)
+RecoverySession.state = RESTORING <-> agent upload_queue: chunki QUEUED->DONE (parytet z §6)
+```
+
+> **Niezmiennik R-1:** `RecoverySession` nigdy nie przechodzi do `RESTORING`
+> dopóki wszystkie wymagane `restore_request` nie są `ready` (brak częściowego
+> restore z na wpół odmrożonych danych).
+
+### 20.2 Cross-references
+
+- `ovh-cloud-archive-migration-spec.md` Dodatek E — async restore, `restore_request`.
+- `subscription-expiration-handling.md` §2 — `canRestore`, Access Boundary.
+- `agent-vps-master-spec.md` C.4 — maszyna stanów uploadu/restore.

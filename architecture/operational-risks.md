@@ -116,3 +116,24 @@ Stripe moze retry webhook do 72h po pierwszym wyslaniu. 90 dni daje duzy margine
 | Niepoprawny webhook secret | Niskie | Sredni (platnosci nie aktywowane) | **P2** |
 
 **Wniosek:** Najwiekszym zagrozeniem jest konfiguracja serwera (`.env`), nie kod. System jest technicznie dobrze zabezpieczony — pilnuj kluczy.
+
+---
+
+## 4. LLD — egzekwowanie i wykrywanie (cross-ref niezmienników)
+
+> Te ryzyka są teraz wsparte konkretnymi niezmiennikami i alertami w pozostałych
+> specach. Tabela mapuje ryzyko → mechanizm wykrycia, żeby nie polegać wyłącznie
+> na „pamiętaj o `.env`".
+
+| Ryzyko | Niezmiennik / mechanizm | Wykrycie (alert) |
+|--------|--------------------------|------------------|
+| Fallback test→live (R#1) | `stripe-key-isolation.md` K-3 (fail-closed bez secret), K-5 (lazy live prices) | `WebhookSignatureSpike`, log prefix klucza przy starcie |
+| `stripe_event_idempotency` rośnie (R#2) | `buffer-core` PostUploadCleanup §C.3 + cron (sekcja 2) | metryka rozmiaru tabeli; `master-tdd-plan.md` 9.7 |
+| Niepoprawny webhook secret (R#3) | dual-secret + `400` (`stripe-key-isolation.md` §3) | `pb_webhook_signature_fail_total` (`observability` D.1) |
+| Trial abuse (nowe) | `trial-abuse-prevention.md` AV-1..7 | `WebhookSignatureSpike`, soft-signal review queue |
+| Rozjazd wersji shared (nowe) | `shared-core` S-2 (pinning) | `VersionSkew` (`observability` D.2) |
+
+> **Uwaga (audyt):** ryzyko #1 (`.env`) pozostaje **P1 operacyjne**, ale jego
+> *skutek* (płatność w trybie test zamiast live) jest teraz obserwowalny przez
+> telemetrię wersji/trybu logowaną przez buffer — patrz `stripe-key-isolation.md`
+> §C.2 (`mode` zdarzenia) i `observability-and-dr-spec.md` Dodatek D.

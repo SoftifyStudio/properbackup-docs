@@ -979,3 +979,96 @@ Pack budowany w `/tmp`, /tmp pelny.
 - **PrivacyAlert** — exception rzucany przez `ExcludeFilter` na wrazliwy plik
 - **Telemetria** — heartbeat + metryki + bledy wysylane do buffera
 - **POLL_INTERVAL** — czestotliwosc skanowania, default 5 min
+
+---
+
+## Dodatek C — LLD: config, throttling, CLI i state machine
+
+> Konsolidacja Low-Level Design strony agenta: schemat configu, parametry
+> IoThrottle/Circuit Breaker, kontrakt CLI i maszyna stanów uploadu. Cel: agent
+> implementuje deterministycznie, bez zgadywania wartości domyślnych.
+
+### C.1 Schemat `global.json` (config agenta)
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "serverId": "uuid-v4",
+  "machineId": "uuid-v4",            // generowany przy 1. starcie, persystowany
+  "ownerEmail": "user@example.com",
+  "bufferUrl": "https://buffer...",
+  "storageUrl": "https://storage...",
+  "refreshToken": "<encrypted-disk-side>",   // NIGDY plaintext na dysku
+  "encryptionPasswordRef": "keyring://...",   // klucz w OS keyring, nie w pliku
+  "pollIntervalSec": 300,
+  "ioThrottle": { "readMbps": 50, "cpuPct": 25 },
+  "excludeGlobs": ["**/*.tmp", "**/node_modules/**"]
+}
+```
+
+- Plik `0600`, katalog `0700`. `refreshToken` szyfrowany kluczem z OS keyring
+  (DPAPI/Keychain/libsecret), fallback: AES z machine-bound key.
+
+### C.2 Parametry IoThrottle i Circuit Breaker
+
+```kotlin
+object AgentDefaults {
+    const val READ_THROTTLE_MBPS = 50         // token-bucket na odczyt dysku
+    const val CPU_CAP_PCT = 25                // dławienie przy ARM64/tani VPS
+    const val POLL_INTERVAL_SEC = 300
+
+    // Circuit Breaker (upload do buffera)
+    const val CB_FAILURE_THRESHOLD = 5        // 5 kolejnych błędów -> OPEN
+    const val CB_OPEN_DURATION_SEC = 60       // po 60s -> HALF_OPEN (1 próbny request)
+    const val CB_HALF_OPEN_PROBES = 1
+
+    // Retry (per chunk) — exponential backoff + jitter
+    val RETRY_DELAYS_MS = longArrayOf(500, 2000, 8000)   // 3 próby, potem CB
+}
+```
+
+| Kod odpowiedzi buffera | Reakcja agenta |
+|------------------------|----------------|
+| `200/201/204` | sukces, kontynuuj |
+| `403 SUBSCRIPTION_EXPIRED` | **stop** + alert e-mail ownera (NIE retry) |
+| `507 DISK_FULL` | backoff długi (np. następny cykl), NIE natychmiastowy retry |
+| `429`/`5xx`/timeout | retry wg `RETRY_DELAYS_MS`, potem Circuit Breaker OPEN |
+| `400 INVALID_PAYLOAD` | log + skip pliku (nie retry — błąd deterministyczny) |
+
+### C.3 Kontrakt CLI
+
+```
+properbackup-agent --activate <TOKEN>     # jednorazowa aktywacja, zapis global.json
+properbackup-agent --status               # drukuje serverId, ostatni scan, stan CB, kolejkę
+properbackup-agent --run                  # tryb foreground (systemd ExecStart)
+properbackup-agent --scan-now             # wymuś differential scan poza POLL_INTERVAL
+properbackup-agent --version              # wersja + porównanie z latest_agent_version
+```
+
+Kody wyjścia: `0` OK, `2` brak/niepoprawny config, `3` aktywacja nieudana
+(`TOKEN_USED`/`TOKEN_INVALID`), `4` subskrypcja wygasła.
+
+### C.4 Maszyna stanów uploadu chunku (lokalna, persystowana)
+
+```
+QUEUED → HASHING → (HEAD resume?) → UPLOADING → SEALING → DONE
+                                        │            │
+                                     interrupt     verify-fail
+                                        ▼            ▼
+                                     QUEUED        FAILED (retry/CB)
+```
+
+- Stan trzymany w lokalnym SQLite agenta (`upload_queue`), aby po crashu/restarcie
+  wznowić od pierwszego chunku `!= DONE` (parytet z recovery, patrz
+  `user-facing-recovery-spec.md` §6).
+- `sha256(plaintext)` liczony PRZED enkrypcją = tożsamość resume (HEAD), spójnie z §4.3.
+
+### C.5 Niezmienniki
+
+| # | Niezmiennik | Cross-ref |
+|---|-------------|-----------|
+| A-1 | `refreshToken`/hasło szyfrowania NIGDY plaintext na dysku/logach | C.1, `crypto-and-compliance-spec.md` |
+| A-2 | `403 SUBSCRIPTION_EXPIRED` ⇒ agent STOP, nie retry | C.2, `subscription-expiration-handling.md` |
+| A-3 | Plain path/sha NIGDY w URL/objectName — UUID + pathId | §4.3, `buffer-core-master-spec.md` B-3 |
+| A-4 | Upload resumowalny po crashu (stan w SQLite) | C.4 |
+| A-5 | IoThrottle domyślnie ON (50 MB/s, 25% CPU) — ochrona tanich VPS/ARM64 | C.2 |
