@@ -1008,3 +1008,41 @@ Tylko po ✓ wszystkich powyzszych: flipnij feature flag, wpusc pierwszego prawd
 - **DLQ** — Dead Letter Queue. Zobacz `master-tdd-plan.md`.
 - **WAL** — Write-Ahead Log w PostgreSQL.
 - **Heartbeat** — Cron job ktory pinguje healthchecks.io żeby udowodnic ze dziala.
+
+---
+
+## Dodatek D — LLD: katalog metryk i alertów dla nowych niezmienników
+
+> Konsolidacja Low-Level Design: każdy niezmiennik wprowadzony w pozostałych
+> specach (guardy fail-safe, async restore, Circuit Breaker agenta) MUSI mieć
+> metrykę + alert, inaczej cicha regresja przejdzie niezauważona.
+
+### D.1 Metryki (Prometheus naming)
+
+| Metryka | Typ | Źródło / niezmiennik |
+|---------|-----|----------------------|
+| `pb_chunks_failed_total{reason}` | counter | DiskGuard/QuotaGuard fail-safe (`buffer-core` B-1) |
+| `pb_guard_db_unavailable_total{guard}` | counter | fail-safe blokada przy DB down (B-1) |
+| `pb_restore_request_pending` | gauge | zaległe rehydracje (`ovh` O-1, E.3) |
+| `pb_restore_eta_breached_total` | counter | restore > deklarowane `eta_at` (SLO) |
+| `pb_agent_cb_open_total{serverId}` | counter | Circuit Breaker agenta OPEN (`agent-vps` C.2) |
+| `pb_shared_version_skew` | gauge | rozjazd wersji shared we flocie (`shared` S-2/18.2) |
+| `pb_webhook_signature_fail_total` | counter | nieudana weryfikacja podpisu Stripe (`trial-abuse` §6) |
+
+### D.2 Reguły alertów (progi)
+
+| Alert | Warunek | SEV |
+|-------|---------|-----|
+| `GuardDbUnavailable` | `increase(pb_guard_db_unavailable_total[5m]) > 0` | SEV-2 (fail-safe zadziałał, ale DB down) |
+| `RestoreBacklog` | `pb_restore_request_pending > 50` przez 30m | SEV-3 |
+| `RestoreEtaBreached` | `increase(pb_restore_eta_breached_total[1h]) > 0` | SEV-3 (komunikacja do klienta) |
+| `AgentCircuitOpen` | `increase(pb_agent_cb_open_total[15m]) > 3` (jeden serverId) | SEV-3 |
+| `WebhookSignatureSpike` | `increase(pb_webhook_signature_fail_total[10m]) > 20` | SEV-2 (możliwy atak, `trial-abuse` AV-4) |
+| `VersionSkew` | `pb_shared_version_skew > 0` po release window | SEV-4 |
+
+### D.3 Cross-references
+
+- `buffer-core-master-spec.md` B-1 — fail-safe guardów (metryka `pb_chunks_failed_total`).
+- `ovh-cloud-archive-migration-spec.md` E.3 — `restore_request` (backlog/ETA).
+- `agent-vps-master-spec.md` C.2 — Circuit Breaker.
+- `trial-abuse-prevention.md` §5/§6 — soft-signal scoring, webhook signature.

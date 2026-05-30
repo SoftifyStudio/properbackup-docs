@@ -958,3 +958,44 @@ Server lag (TPS <5), backup task scheduling delayed.
 - **shadowJar** — Gradle task ktora bundles dependencies do plugin JAR
 - **Pterodactyl** — popular MC hosting panel
 - **MultiCraft** — popular MC hosting panel
+
+---
+
+## Dodatek C — LLD: `PaperHostAdapter` (cienki wrapper na shared)
+
+> Plugin MC jest **cienkim hostem** (HR-2 z `shared-core-architecture-spec.md`):
+> NIE reimplementuje uploadu/crypto/scanera — deleguje do `properbackup-shared`,
+> implementując tylko `HostAdapter` dla środowiska Bukkit/Paper.
+
+### C.1 Kontrakt adaptera
+
+```kotlin
+class PaperHostAdapter(private val plugin: JavaPlugin) : HostAdapter {
+    override fun scheduler(): PlatformScheduler = BukkitScheduler(plugin)   // Bukkit task API
+    override fun fs(): PlatformFs = JvmPlatformFs()                          // ten sam co VPS (JVM)
+    override fun clock(): PlatformClock = SystemClock
+    override fun configStore(): ConfigStore = YamlConfigStore("config.yml")  // state.json osobno (sekrety)
+    override fun netInfo(): PlatformNetInfo = PaperNetInfo()                  // maxIoBytesPerSec wg hosta MC
+}
+```
+
+> **Niezmiennik MC-1:** całość transportu/crypto/scanera pochodzi z `shared`
+> (jeden JAR). Jedyny kod plugin-specyficzny to: Bukkit listeners, scheduler,
+> persystencja configu i komenda `/properbackup`. Każda logika domenowa dodana
+> do pluginu = naruszenie HR-2 (auto-reject w review).
+
+### C.2 Specyfika MC (czego VPS nie ma)
+
+| Aspekt | Reguła |
+|--------|--------|
+| Spójność świata podczas backupu | `/save-off` → flush → snapshot region files → `/save-on` (nie kopiuj `.mca` w trakcie zapisu) |
+| Główny wątek serwera | I/O i upload na async task (Bukkit `runTaskAsynchronously`) — NIGDY nie blokuj tick loop |
+| `.mca` region files | traktowane jak zwykłe pliki przez `DifferentialScanner` (4MB chunk dedup, `shared` HR-6) |
+| Sekrety (`refreshToken`) | w `state.json` (`0600`), NIE w `config.yml`; spójnie z `agent-vps` A-1 |
+| `403 SUBSCRIPTION_EXPIRED` | plugin loguje + przestaje backupować (parytet z `agent-vps` A-2) |
+
+### C.3 Cross-references
+
+- `shared-core-architecture-spec.md` HR-1/HR-2/§18 — kontrakt jeden JAR + wersjonowanie.
+- `agent-vps-master-spec.md` C — odpowiednik adaptera dla VPS (parytet zachowań).
+- `buffer-core-master-spec.md` C.1 — ten sam kontrakt HTTP uploadu co VPS.

@@ -1000,3 +1000,44 @@ Klient backup'uje swój komputer, gdzie ma plik `klienci.xlsx` z PII swoich klie
 - **Zero-knowledge** — operator nie ma access do plaintext
 - **Sub-processor** — third party przetwarzajacy dane w naszym imieniu
 - **Breach** — naruszenie ochrony danych (art. 33)
+
+---
+
+## Dodatek C — LLD: hierarchia kluczy i niezmienniki crypto
+
+> Konsolidacja Low-Level Design warstwy szyfrowania. `ProperCrypto` jest
+> **zamrożony** (sekcja 3 NIE RUSZAJ) — ta sekcja dokumentuje jego kontrakt, by
+> agent NIE złamał zero-knowledge przy implementacji recovery/UI.
+
+### C.1 Hierarchia kluczy
+
+```
+encryptionPassword (per user, ustalane przy aktywacji)
+        │  Argon2id(password, salt=userId)            // KDF, deterministyczny per user
+        ▼
+masterKey (32B, NIGDY na serwerze)
+        │  HKDF(masterKey, info=pathId||chunkSeq)
+        ▼
+dataKey (per chunk)  ──AES-256-GCM(stream)──►  encrypted chunk (magic+ver+nonce+ct+tag)
+```
+
+| Klucz | Gdzie żyje | Gdzie NIGDY |
+|-------|-----------|-------------|
+| `encryptionPassword` | OS keyring agenta; przeglądarka (restore) — w pamięci sesji | DB buffera, logi, OVH meta |
+| `masterKey`/`dataKey` | RAM klienta podczas operacji | dysk plaintext, serwer |
+
+### C.2 Niezmienniki (agent NIE może ich złamać)
+
+| # | Niezmiennik | Test ochronny / cross-ref |
+|---|-------------|---------------------------|
+| C-1 | Zero-knowledge: serwer nie ma `encryptionPassword` ani plaintextu (poza ulotnym buforem pre-seal) | grep DB/logów: brak hasła; HR-7 `shared` |
+| C-2 | Szyfrowanie strumieniowe — brak pełnego plaintextu na dysku klienta po enkrypcji | `shared` HR-7 |
+| C-3 | `paths_index.path_id` pseudonimizuje ścieżkę (Klasa B) — plain path nigdy w OVH/logach | `buffer-core` B-3 |
+| C-4 | Hard delete na żądanie (art. 17) w 30 dni, łącznie z OVH + tombstone | sekcja 4, RODO art. 17 |
+| C-5 | `audit_log` append-only z hash-chain (re-compute weryfikuje integralność) | sekcja 4 „Re-compute chain" |
+
+### C.3 Cross-references
+
+- `shared-core-architecture-spec.md` HR-7 — streaming encryption, `ProperCrypto` zamrożony.
+- `agent-vps-master-spec.md` C.1/A-1 — przechowywanie hasła w keyring.
+- `ovh-cloud-archive-migration-spec.md` — RODO hard delete z cold tier.

@@ -872,3 +872,52 @@ User wraca z Checkout, webhook jeszcze nie przyszedl → `subscription_status` =
 - **Snapshot timeline** — chronological view of backups per server
 - **Cold thaw** — rehydration z cold tier (4-12h)
 - **Tombstone** — soft-delete marker w timeline
+
+---
+
+## Dodatek C — LLD: kontrakt frontend ↔ backend (accessState + SSE)
+
+> Konsolidacja Low-Level Design warstwy web. Frontend NIE liczy własnej logiki
+> dostępu/wygaśnięcia — konsumuje `accessState` z backendu (jedna funkcja prawdy).
+> SSE jest jedynym kanałem live-update; brak pollingu poza fallbackiem.
+
+### C.1 `accessState` — jedyne źródło stanu UI
+
+Panel renderuje gate'y wg `accessState` z `GET /api/account/status`
+(`subscription-expiration-handling.md` §4). **Nie** duplikuje warunków
+`expiresAt > now` w JS.
+
+```jsonc
+// reakcja UI na accessState
+{ "TRIAL":            { upload: true,  banner: "trial-countdown" },
+  "LOCKED_TRIAL":     { upload: false, banner: "trial-expired",  restore: true },
+  "ACTIVE_SUB":       { upload: true,  banner: null },
+  "CANCELLED_GRACE":  { upload: true,  banner: "cancelled-countdown" },
+  "LOCKED_EXPIRED":   { upload: false, banner: "sub-expired",    restore: true } }
+```
+
+> **Niezmiennik W-1:** przycisk „Restore/Download" jest aktywny w KAŻDYM stanie
+> (`canRestore=true`) — UI nigdy nie blokuje odzyskania danych (anti-hostage,
+> `subscription-expiration-handling.md` §2).
+
+### C.2 Katalog zdarzeń SSE (`GET /sse/events`)
+
+| Event | Payload | Konsument UI |
+|-------|---------|--------------|
+| `chunk_received` | `{serverId, pathId}` | toast / progress upload |
+| `chunk_sealed` | `{serverId, snapshotId}` | odświeżenie Timeline |
+| `restore_ready` | `{restoreId, url}` | ThawProgress → Download |
+| `restore_pending` | `{restoreId, etaAt}` | ThawProgress bar (eta) |
+| `recovery_state` | `{sessionId, state}` | RecoveryWizard overlay |
+| `agent_offline` | `{serverId, lastSeen}` | badge „offline" |
+
+- Reconnect: klient wysyła `Last-Event-ID`; backend replay od ostatniego.
+- Backpressure: przy wolnym kliencie backend dropuje najstarsze nie-krytyczne
+  eventy (`chunk_received`), nigdy `restore_ready`/`recovery_state`.
+
+### C.3 Cross-references
+
+- `subscription-expiration-handling.md` §2/§4 — `accessState`, `canRestore`.
+- `ovh-cloud-archive-migration-spec.md` E.4 — kontrakt restore (202/poll).
+- `user-facing-recovery-spec.md` — RecoveryWizard, ThawProgress, overlay.
+- `buffer-core-master-spec.md` C.1 — endpoint `/sse/events`, kształt eventów.

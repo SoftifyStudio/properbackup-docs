@@ -836,3 +836,42 @@ Releases (~1/tydzien): +50 min = nadal w free tier.
 - **GHCR** — GitHub Container Registry
 - **B2** — Backblaze B2 (S3-compatible object storage)
 - **Branch protection** — GitHub rule enforcing CI passing przed merge
+
+---
+
+## Dodatek D — LLD: bramki merge (egzekwowanie niezmienników)
+
+> Niezmienniki z pozostałych speców są warte tyle, ile ich egzekwowanie. Ta sekcja
+> mapuje je na konkretne joby CI / branch-protection. **Uwaga:** dziś testy
+> uruchamiane są lokalnie (brak GitHub Actions) — poniższe to docelowy stan
+> (CICD-G), a do tego czasu bramki realizuje review + lokalny `pre-commit`.
+
+### D.1 Wymagane statusy (required checks)
+
+| Job | Bramkuje | Realizuje niezmiennik |
+|-----|----------|------------------------|
+| `ktlint` + `markdownlint` | format | pre-commit (sekcja 6) |
+| `gitleaks` | brak sekretów w diffie | `crypto` C-1, `stripe-key-isolation` K-2 |
+| `buffer-tests` (Testcontainers PG16) | billing/guardy | `downgrade` I-1..I-5, `buffer-core` B-1 |
+| `cross-host-parity` | identyczny blob VPS/MC | `shared` S-3 / HR-9 |
+| `compile-all-consumers` | shared nie psuje konsumentów | `shared` S-1 |
+| `format-compat` | magic bytes/wersja blobu | `shared` S-4, `crypto` |
+
+### D.2 Polityka „shared = MAJOR"
+
+PR dotykający `properbackup-shared` z czerwonym `cross-host-parity` lub
+`compile-all-consumers` jest **blokowany** (branch protection). Zmiana łamiąca
+kompilację konsumenta wymaga MAJOR bump + skoordynowanego release (patrz
+`shared-core-architecture-spec.md` §18.3).
+
+### D.3 Pre-commit jako pierwsza linia (stan obecny)
+
+Dopóki nie ma CI w chmurze, `pre-commit` (sekcja 6) jest jedynym automatycznym
+gate: `ktlint -F`, `gitleaks`, `markdownlint`, trailing-whitespace. **Nie wolno
+commitować z `--no-verify.**
+
+### D.4 Cross-references
+
+- `shared-core-architecture-spec.md` §18.4 — bramka `cross-host-parity`.
+- `master-tdd-plan.md` — billing test suite (Testcontainers).
+- `crypto-and-compliance-spec.md` C-1 — gitleaks/secret scanning.
