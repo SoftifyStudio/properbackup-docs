@@ -126,6 +126,11 @@ agent prowadzi zywy plik-pamiec (`changelog/{data}-money-hardening-e2e.md` z sek
 „STAN / CHECKLIST") i re-czyta CEL NADRZEDNY + checklist na poczatku KAZDEJ iteracji.
 (Grupa E4 / Prompt #2 dotyczy webhookow/race POZA platnosciami, np. backup/SSE.)
 
+**Kaganice na petle:** (1) preflight sekretow na starcie (fail fast jak brak
+`TEST_SERVER_SECRET_KEY`/`PROPERBACKUP_TEST_ACCOUNT_PASSWORD`); (2) circuit breaker —
+3 te same faile pod rzad = (C) DECYZJA, nie probuj 4. raz; (3) limit wymyslania —
+po baterii A-J max 5 nowych scenariuszy, potem STOP i pytanie do Daniela.
+
 ### Grupa E2 — Trial Abuse & Auth Edge Cases
 
 | # | ID | Scenariusz | Typ | Ref |

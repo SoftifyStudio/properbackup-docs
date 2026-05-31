@@ -50,6 +50,17 @@ Aktualizuj ten plik po KAZDYM scenariuszu i po KAZDYM fixie.
 To jest Twoja pamiec — z niej wiesz co juz zrobione i co zostalo.
 
 ───────────────────────────────────────────────────────────────────────
+PRZED STARTEM (preflight — fail fast, zanim zaczniesz pisac testy):
+───────────────────────────────────────────────────────────────────────
+Sprawdz, ze masz wymagane sekrety w env:
+  - ${PROPERBACKUP_TEST_ACCOUNT_PASSWORD} (haslo kont testowych)
+  - ${TEST_SERVER_SECRET_KEY} (klucz SSH root do serwera testowego, do psql)
+Szybki test: `echo "${PROPERBACKUP_TEST_ACCOUNT_PASSWORD}" | wc -c` (>1) oraz proba
+SSH: `ssh -i <klucz> root@properbackup-test-server.softify.com.pl 'echo ok'`.
+Jesli ktoregos brakuje albo SSH nie wchodzi — ZATRZYMAJ sie OD RAZU i napisz do
+Daniela dokladnie czego brakuje. NIE pisz testow, ktore i tak padna w KROKU 0.
+
+───────────────────────────────────────────────────────────────────────
 PETLA HARDENINGU (rdzen tego zadania — wykonuj w kolko):
 ───────────────────────────────────────────────────────────────────────
 KROK 0 (na poczatku KAZDEJ iteracji — re-anchor celu):
@@ -85,11 +96,17 @@ KROK 3. Dla KAZDEGO czerwonego testu zreprodukuj i zdiagnozuj (trace, HTTP statu
 
 KROK 4. Uruchom CALY zestaw ponownie. Powtarzaj KROK 3-4 az 0 czerwonych
         (poza ewentualnymi pozycjami (C) czekajacymi na decyzje).
-KROK 5. Gdy wszystko zielone — wroc do CELU NADRZEDNEGO i sprobuj ZLAMAC modul
-        nowym edge case'em, ktorego jeszcze nie ma w baterii (nowy decline code,
-        nowa kolejnosc webhookow, nowy atak na autoryzacje). Jak znajdziesz cos co
-        lamie system — dopisz do CHECKLIST, dopisz test i WROC do KROKU 0.
-        Konczysz dopiero gdy nie potrafisz juz wymyslic scenariusza psujacego modul.
+        CIRCUIT BREAKER (anti-utkniecie): jesli dany test failuje z TEGO SAMEGO
+        powodu 3 razy z rzedu mimo Twoich prob naprawy — NIE probuj 4. raz.
+        Oznacz go OD RAZU jako (C) DECYZJA, opisz problem w changelogu i idz dalej.
+        Nie blokuj calej petli jednym opornym bledem.
+KROK 5. Gdy CALA bateria bazowa (A-J) jest zielona — wroc do CELU NADRZEDNEGO i
+        wymysl MAKSYMALNIE 5 nowych, unikalnych scenariuszy edge case (nie warianty
+        tego samego: NIE rob email 64/65/66 znakow — szukaj jakosciowo innych dziur:
+        nowy decline code, nowa kolejnosc webhookow, nowy atak na autoryzacje).
+        Dopisz je do CHECKLIST, przetestuj, napraw wg KROK 3-4.
+        Jesli te 5 tez wyjdzie zielone — ZATRZYMAJ sie i POPROS Daniela o autoryzacje
+        dalszego wymyslania. NIE wpadaj w nieskonczona petle wariacji.
 
 ───────────────────────────────────────────────────────────────────────
 BATERIA SCENARIUSZY (pisz JAK NAJWIECEJ — to jest minimum, dokladaj wlasne):
