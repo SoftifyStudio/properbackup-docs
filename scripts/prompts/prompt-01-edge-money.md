@@ -54,11 +54,31 @@ PRZED STARTEM (preflight — fail fast, zanim zaczniesz pisac testy):
 ───────────────────────────────────────────────────────────────────────
 Sprawdz, ze masz wymagane sekrety w env:
   - ${PROPERBACKUP_TEST_ACCOUNT_PASSWORD} (haslo kont testowych)
-  - ${TEST_SERVER_SECRET_KEY} (klucz SSH root do serwera testowego, do psql)
-Szybki test: `echo "${PROPERBACKUP_TEST_ACCOUNT_PASSWORD}" | wc -c` (>1) oraz proba
-SSH: `ssh -i <klucz> root@properbackup-test-server.softify.com.pl 'echo ok'`.
-Jesli ktoregos brakuje albo SSH nie wchodzi — ZATRZYMAJ sie OD RAZU i napisz do
-Daniela dokladnie czego brakuje. NIE pisz testow, ktore i tak padna w KROKU 0.
+  - ${TEST_SERVER_SECRET_KEY} (klucz SSH ed25519, user root)
+
+UWAGA o kluczu SSH: sekret moze byc zapisany jako sam base64 (jedna linia, ze
+spacjami, BEZ naglowkow PEM). Zbuduj plik klucza odpornie na oba formaty:
+  KEY=~/.ssh/tskey; mkdir -p ~/.ssh
+  if printf '%s' "${TEST_SERVER_SECRET_KEY}" | grep -q "BEGIN OPENSSH"; then
+    printf '%s\n' "${TEST_SERVER_SECRET_KEY}" > "$KEY"
+  else
+    { echo "-----BEGIN OPENSSH PRIVATE KEY-----"; \
+      printf '%s' "${TEST_SERVER_SECRET_KEY}" | tr -d ' \t\r\n' | fold -w 70; echo; \
+      echo "-----END OPENSSH PRIVATE KEY-----"; } > "$KEY"
+  fi
+  chmod 600 "$KEY"; ssh-keygen -y -f "$KEY"   # musi wypisac klucz publiczny
+
+Zweryfikowane parametry serwera (dzialaja):
+  - host: root@properbackup-test-server.softify.com.pl
+  - kontener bazy: properbackup-db, psql user: properbackup
+  - SSH test: ssh -i "$KEY" -o StrictHostKeyChecking=no root@properbackup-test-server.softify.com.pl 'echo ok'
+  - DB test: ssh ... 'docker exec properbackup-db psql -U properbackup -c "\dt"'
+  - tabele istotne: users, payment_order, subscription_config, subscription_audit_log,
+    stripe_event, stripe_event_idempotency, stripe_price_config
+
+Jesli ktoregos sekretu brakuje, klucz jest niepoprawny (ssh-keygen -y pada) albo
+SSH/psql nie wchodzi — ZATRZYMAJ sie OD RAZU i napisz do Daniela dokladnie co.
+NIE pisz testow, ktore i tak padna w KROKU 0.
 
 ───────────────────────────────────────────────────────────────────────
 PETLA HARDENINGU (rdzen tego zadania — wykonuj w kolko):
