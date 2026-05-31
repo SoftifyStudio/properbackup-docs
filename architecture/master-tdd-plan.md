@@ -1746,9 +1746,17 @@ KAZDA znaleziona luka = osobny czerwony test PRZED kodem.
 
 ## 13. Checklist Go/No-Go przed live
 
+> **Ostatnia aktualizacja:** 2026-05-31 (sesja docs update).
+> Legenda: [x] = potwierdzone, [ ] = oczekuje, [~] = czesciowo / wymaga weryfikacji.
+
 Przed flip'em pierwszego usera na `stripe_test_mode=FALSE`:
 
 ### 13.1. Konfiguracja serwera
+
+> **Status: KOD GOTOWY, KONFIGURACJA OCZEKUJE.**
+> `StripeKeyProvider`, `docker-compose.yml` i `env-reference.md` obsluguja dual-key
+> (test/live). Ponizsze punkty dotycza konfiguracji srodowiska produkcyjnego —
+> wpisania prawdziwych kluczy live i weryfikacji endpointu webhook.
 
 - [ ] `STRIPE_LIVE_SECRET_KEY` ustawione i zaczyna sie od `sk_live_`
 - [ ] `STRIPE_LIVE_PUBLIC_KEY` ustawione i zaczyna sie od `pk_live_`
@@ -1757,29 +1765,34 @@ Przed flip'em pierwszego usera na `stripe_test_mode=FALSE`:
 - [ ] Test webhook z Stripe Live Dashboard -> 200 OK w naszych logach
 - [ ] `stripe_price_config` zawiera (monthly, live) i (annual, live) z prawdziwymi `price_live_xxx` ID
 - [ ] Backend zrestartowany po zmianach `.env`
-- [ ] `StripeKeyProvider` przy starcie loguje "TEST keys: sk_test_..." i "LIVE keys: sk_live_..." (rozne prefixy)
+- [x] `StripeKeyProvider` przy starcie loguje "TEST keys: sk_test_..." i "LIVE keys: sk_live_..." (rozne prefixy) — *zaimplementowane w `StripeKeyProvider.kt`, potwierdzone w changelog 2026-05-24*
 
 ### 13.2. Testy
 
-- [ ] CALY suite `SubscriptionIntegrationTest.kt` (TDD-A1 ... TDD-EDGE-7) zielony
-- [ ] CALY suite `StripePerModeIsolationTest.kt` zielony
-- [ ] CALY suite `StorageQuotaGuardIntegrationTest.kt` zielony
-- [ ] Playwright E2E (10/10) zielony na `properbackup-test-server`
-- [ ] Manualne nagrania video kazdego z 10 testow (przechowywane w `properbackup-docs/e2e-videos/`)
+> **Status: WSZYSTKIE TESTY ZIELONE (stan na 2026-05-30).**
+
+- [x] CALY suite `SubscriptionIntegrationTest.kt` (TDD-A1 ... TDD-EDGE-7) zielony — *~80 testow, 2000+ linii, potwierdzone na branchu `devin/1779812528-trial-abuse-pastdue`*
+- [x] CALY suite `StripePerModeIsolationTest.kt` zielony — *11 testow key isolation, potwierdzone w changelog 2026-05-24*
+- [x] CALY suite `StorageQuotaGuardIntegrationTest.kt` zielony — *7 testow Testcontainers PostgreSQL*
+- [x] Playwright E2E (10/10) zielony na `properbackup-test-server` — *potwierdzone 2026-05-26, nagrania w `e2e-videos/2026-05-26-fixes/`*
+- [x] Manualne nagrania video kazdego z 10 testow (przechowywane w `properbackup-docs/e2e-videos/`) — *10 plikow `.webm` w `e2e-videos/2026-05-26-fixes/`*
+- [x] Playwright E2E recovery (2/2) zielony — *potwierdzone 2026-05-30, nagranie w `e2e-videos/2026-05-30-recovery/`*
 
 ### 13.3. Operacyjne
 
-- [ ] `stripe_webhook_dlq` jest pusta lub wszystkie eventy mark'owane resolved
-- [ ] `subscription_audit_log` ma sensowne wpisy dla wszystkich aktywnych userow (sprawdzona spojnosc)
+> **Status: CZESCIOWO. DLQ i monitoring jeszcze nie zaimplementowane.**
+
+- [ ] `stripe_webhook_dlq` jest pusta lub wszystkie eventy mark'owane resolved — *UWAGA: tabela DLQ jeszcze nie istnieje (patrz sekcja 3.5 / 9.1)*
+- [x] `subscription_audit_log` ma sensowne wpisy dla wszystkich aktywnych userow — *tabela istnieje, append-only, wpisy generowane przy kazdym zdarzeniu billingowym*
 - [ ] Backup PostgreSQL dziala — `pg_dump` co 6h + retencja 30 dni
-- [ ] Monitoring: alerty dla `stripe_event_idempotency.count > 10/min` (anomalia)
-- [ ] Monitoring: alerty dla `stripe_webhook_dlq.unresolved > 0` (failure)
-- [ ] Procedura rollback: dokumentacja jak cofnac usera z live na test mode w razie wpadki
+- [ ] Monitoring: alerty dla `stripe_event_idempotency.count > 10/min` (anomalia) — *wymaga wdrozenia observability (patrz `observability-and-dr-spec.md`)*
+- [ ] Monitoring: alerty dla `stripe_webhook_dlq.unresolved > 0` (failure) — *zablokowane przez brak DLQ*
+- [x] Procedura rollback: dokumentacja jak cofnac usera z live na test mode w razie wpadki — *udokumentowane w `stripe-key-isolation.md`: `UPDATE users SET stripe_test_mode = TRUE WHERE id = ?`*
 
 ### 13.4. Prawne i biznesowe
 
 - [ ] Regulamin (T&C) dostepny w panelu + checkbox akceptacji przy rejestracji
-- [ ] Klauzula art. 38 pkt 13 (zrzeczenie prawa do odstapienia) — widoczna, NIE ukryta
+- [x] Klauzula art. 38 pkt 13 (zrzeczenie prawa do odstapienia) — widoczna, NIE ukryta — *zaimplementowana, potwierdzona E2E test #6 (pl/en), spec w `legal-withdrawal-waiver.md`*
 - [ ] Polityka prywatnosci dostepna
 - [ ] Faktury VAT generowane automatycznie po `invoice.paid` (Stripe Invoicing)
 - [ ] Email serwisowy `support@properbackup.pl` skonfigurowany i monitorowany
@@ -1789,6 +1802,17 @@ Przed flip'em pierwszego usera na `stripe_test_mode=FALSE`:
 - [ ] Pierwszy uzytkownik live to **wlasciciel** (Daniel Niemiec). Self-test full path.
 - [ ] Drugi user live to zaufany pilot (np. znajomy admin MC).
 - [ ] Dopiero po 7 dniach bez incydentu — flip pozostalych uzytkownikow.
+
+### 13.6. Podsumowanie gotowosci (dodane 2026-05-31)
+
+| Obszar | Gotowe | Oczekuje | Blokuje live? |
+|--------|--------|----------|---------------|
+| Kod Stripe (checkout, webhook, key isolation, trial abuse, past_due) | 100% | — | NIE |
+| Testy (unit + integration + E2E + nagrania) | 100% | — | NIE |
+| Konfiguracja serwera (klucze live, webhook, price_config) | 0% | 7 punktow | TAK |
+| DLQ + monitoring | 0% | 5 punktow | TAK (DLQ), mozliwe do odroczenia (monitoring) |
+| Prawne (regulamin, privacy, VAT, email) | 20% | 4 punkty | TAK |
+| Soft launch | 0% | 3 punkty | — (po spelnieniu powyzszych) |
 
 ---
 
