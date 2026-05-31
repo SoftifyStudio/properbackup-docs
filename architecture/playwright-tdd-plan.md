@@ -120,6 +120,12 @@ skipow — zielony przez oszustwo jest gorszy niz czerwony.
 w changelogu tabela `repo | plik | SHA | PR | jak cofnac (git revert)`. Bez duzych refaktorow —
 Daniel ma moc cofnac dowolny pojedynczy fix.
 
+**Jedna petla + pamiec:** CALY modul platnosci (w tym webhooki/race/idempotencja platnicze)
+jest w TEJ jednej petli — nie dzielimy go na osobne prompty. Anti-„lost in the middle":
+agent prowadzi zywy plik-pamiec (`changelog/{data}-money-hardening-e2e.md` z sekcja
+„STAN / CHECKLIST") i re-czyta CEL NADRZEDNY + checklist na poczatku KAZDEJ iteracji.
+(Grupa E4 / Prompt #2 dotyczy webhookow/race POZA platnosciami, np. backup/SSE.)
+
 ### Grupa E2 — Trial Abuse & Auth Edge Cases
 
 | # | ID | Scenariusz | Typ | Ref |

@@ -26,18 +26,38 @@ WZORZEC (WAZNE): NIE pisz rejestracji/logowania/checkoutu od zera.
   10/10 PASSED) — rejestracja, weryfikacja emaila i flow Checkout sa tam juz rozwiazane.
 
 ═══════════════════════════════════════════════════════════════════════
-CEL NADRZEDNY:
-Uczynic modul platnosci/subskrypcji NIE DO ZAJECHANIA.
+CEL NADRZEDNY (GWIAZDA POLARNA — wracaj do tego przy KAZDEJ iteracji):
+Uczynic CALY modul platnosci/subskrypcji NIE DO ZAJECHANIA.
 Masz napisac JAK NAJWIECEJ testow unhappy path / edge case (mysl jak atakujacy
 i jak pechowy uzytkownik), uruchamiac je na zywym serwerze i pracowac w PETLI
 tak dlugo, az KAZDY scenariusz jest zielony — a system zachowuje sie bezpiecznie
 (fail-safe) w kazdej awarii. To zadanie dlugodystansowe: iteruj w kolko.
+
+ZAKRES = CALY modul platnosci w TEJ JEDNEJ PETLI (nie dziel na osobne sesje):
+checkout, cykl subskrypcji, webhooki, race/idempotencja, trial abuse, autoryzacja,
+VAT/proration, odpornosc/awarie. Wszystko ponizej to jedno zadanie.
 ═══════════════════════════════════════════════════════════════════════
+
+───────────────────────────────────────────────────────────────────────
+PAMIEC PETLI (anti-"lost in the middle" — KRYTYCZNE przy dlugim przebiegu):
+───────────────────────────────────────────────────────────────────────
+NIE polegaj na pamieci kontekstu — polegaj na PLIKU. Prowadz zywy plik-pamiec:
+  properbackup-docs/changelog/{data}-money-hardening-e2e.md
+Na GORZE tego pliku trzymaj sekcje "STAN / CHECKLIST" — liste WSZYSTKICH ID
+scenariuszy (M-DECLINE-01 ... M-RESIL-05) z checkboxem i statusem
+[ ] TODO / [~] in-progress / [x] PASS / [!] FAIL / [?] DECYZJA + 1-zdaniowa notatka.
+Aktualizuj ten plik po KAZDYM scenariuszu i po KAZDYM fixie.
+To jest Twoja pamiec — z niej wiesz co juz zrobione i co zostalo.
 
 ───────────────────────────────────────────────────────────────────────
 PETLA HARDENINGU (rdzen tego zadania — wykonuj w kolko):
 ───────────────────────────────────────────────────────────────────────
+KROK 0 (na poczatku KAZDEJ iteracji — re-anchor celu):
+        Zanim cokolwiek zrobisz, PRZECZYTAJ ponownie: (a) sekcje CEL NADRZEDNY
+        powyzej, (b) sekcje "STAN / CHECKLIST" w pliku-pamieci. Dopiero potem
+        wybierz nastepny scenariusz. To chroni przed zgubieniem celu w dlugiej petli.
 KROK 1. Napisz/dopisz testy z baterii ponizej (zacznij od grupy, dokladaj kolejne).
+        Po napisaniu/zmianie ZAKTUALIZUJ "STAN / CHECKLIST" w pliku-pamieci.
 KROK 2. Uruchom CALY zestaw: `npx playwright test` (video on, zero retries).
 KROK 3. Dla KAZDEGO czerwonego testu zreprodukuj i zdiagnozuj (trace, HTTP status,
         body, stan DB przez SSH+psql). Potem ZAKLASYFIKUJ przyczyne:
@@ -65,11 +85,11 @@ KROK 3. Dla KAZDEGO czerwonego testu zreprodukuj i zdiagnozuj (trace, HTTP statu
 
 KROK 4. Uruchom CALY zestaw ponownie. Powtarzaj KROK 3-4 az 0 czerwonych
         (poza ewentualnymi pozycjami (C) czekajacymi na decyzje).
-KROK 5. Gdy wszystko zielone — sprobuj ZLAMAC modul nowym edge case'em, ktorego
-        jeszcze nie ma w baterii (nowy decline code, nowa kolejnosc webhookow,
-        nowy atak na autoryzacje). Jak znajdziesz cos co lamie system — dopisz
-        test i WROC do KROKU 2. Konczysz dopiero gdy nie potrafisz juz wymyslic
-        scenariusza, ktory psuje modul.
+KROK 5. Gdy wszystko zielone — wroc do CELU NADRZEDNEGO i sprobuj ZLAMAC modul
+        nowym edge case'em, ktorego jeszcze nie ma w baterii (nowy decline code,
+        nowa kolejnosc webhookow, nowy atak na autoryzacje). Jak znajdziesz cos co
+        lamie system — dopisz do CHECKLIST, dopisz test i WROC do KROKU 0.
+        Konczysz dopiero gdy nie potrafisz juz wymyslic scenariusza psujacego modul.
 
 ───────────────────────────────────────────────────────────────────────
 BATERIA SCENARIUSZY (pisz JAK NAJWIECEJ — to jest minimum, dokladaj wlasne):
@@ -216,8 +236,10 @@ STRIPE SANDBOX INFO:
 ═══════════════════════════════════════════════════════════════════════
 DOKUMENTACJA (po kazdej iteracji aktualizuj):
 ═══════════════════════════════════════════════════════════════════════
-Plik: properbackup-docs/changelog/{data}-money-hardening-e2e.md
+Plik: properbackup-docs/changelog/{data}-money-hardening-e2e.md (= zywy plik-pamiec)
   - naglowek "# {data} — Money Module Hardening (E2E)"
+  - sekcja "STAN / CHECKLIST" NA GORZE: wszystkie ID scenariuszy z checkboxem i
+    statusem [ ]/[~]/[x]/[!]/[?] (Twoja pamiec petli — czytaj ja w KROKU 0)
   - lista PR-ow (web / buffer / shared / docs)
   - TABELA WYNIKOW: ID | scenariusz | status (PASS/FAIL/DECYZJA) | uwagi
   - sekcja "Naprawione bugi": TABELA repo | plik | commit SHA | PR | co bylo zle |
