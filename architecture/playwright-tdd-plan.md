@@ -267,7 +267,9 @@ OCZEKIWANY OUTPUT:
 2. Wyniki: X/Y PASSED (kazdy scenariusz)
 3. Nagrania: test-results/*.webm
 4. PR do properbackup-web
-5. Kopia wideo do properbackup-docs
+5. Kopia wideo do properbackup-docs/e2e-videos/{data}/
+6. Changelog: properbackup-docs/changelog/{data}-[grupa]-e2e.md
+   (naglowek z data, lista PR-ow, tabela ID|scenariusz|status|uwagi, linki do nagran)
 ═══════════════════════════════════════════════════════════════════════
 ```
 
@@ -288,7 +290,8 @@ OCZEKIWANY OUTPUT:
 1. Zmerguj PR z nowymi testami do `properbackup-web`
 2. Zaktualizuj tabele w sekcji 1 tego dokumentu (dodaj nowe testy do baseline)
 3. Jesli test FAILOWAL = BUG → stworz osobna sesje na fix
-4. Skopiuj nagrania wideo do `properbackup-docs/e2e-videos/`
+4. Skopiuj nagrania wideo do `properbackup-docs/e2e-videos/{data}/` + wpis w `e2e-videos/README.md`
+5. Stworz changelog `properbackup-docs/changelog/{data}-[grupa]-e2e.md` (wyniki + linki do nagran)
 
 ---
 

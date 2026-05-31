@@ -118,6 +118,12 @@ OCZEKIWANY OUTPUT:
 4. PR do properbackup-web z nowymi testami
 5. Kopia nagran wideo do properbackup-docs/e2e-videos/{data}/
 6. Raport: tabela scenariusz | status | uwagi
+7. Changelog: properbackup-docs/changelog/{data}-edge-money-e2e.md
+   - naglowek "# {data} — Edge-Money E2E (Grupa E1)"
+   - lista PR-ow (web + docs)
+   - tabela: ID | scenariusz | status (PASS/FAIL) | uwagi
+   - linki do nagran w e2e-videos/{data}/ + wpis w e2e-videos/README.md
+   - przy FAIL: krotki opis buga (HTTP status, body, stan DB)
 
 Jesli jakis test FAILUJE — NIE oznacza to bledu w tescie.
 Oznacza to BUG w kodzie backendowym/frontendowym.
