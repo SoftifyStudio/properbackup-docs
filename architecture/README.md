@@ -11,6 +11,7 @@ Ten katalog zawiera kompletna mape dla przyszlych agentow ProperBackup. Kazdy ma
 | **P0** (fundament) | [Shared Core Architecture](shared-core-architecture-spec.md) | "Jeden JAR" kontrakt KMP, `HostAdapter` interface, cross-host parity tests, forbidden imports lint — fundament dla agent VPS + MC + future Fabric/Forge | `shared`, `agent`, `mc` |
 | **P0** | [Observability & DR](observability-and-dr-spec.md) | PostgreSQL backup/restore, monitoring, SLO/SLA, runbooki, status page, cost monitoring | `buffer`, `stack`, `docs` |
 | **P0** (billing) | [Master TDD & Resilience Plan](master-tdd-plan.md) | Billing pre-prod hardening: 10 testow A-H, 30+ edge cases, DLQ, agent JWT, ProcessingScreen, dunning, cleanup | `buffer`, `web` |
+| **P0** (testy) | [Playwright E2E TDD Plan](playwright-tdd-plan.md) | **AKTYWNY** — 24 edge case scenariuszy Playwright na serwerze testowym. Micro-tasking: plan → prompt → sesja. Prompty w `scripts/prompts/` | `web`, `docs` |
 | **P1** | [Agent VPS](agent-vps-master-spec.md) | Resumable upload, circuit breaker, IoThrottle 50MB/s, JWT 5min, jlinkDist multi-platform, auto-update | `agent`, `shared` |
 | **P1** | [OVH Cloud Archive Migration](ovh-cloud-archive-migration-spec.md) | Live storage migracja, koszty per GB, cold tier 90d, disaster recovery z OVH, cutover plan | `buffer`, `stack` |
 | **P1** | [CI/CD Release Pipeline](ci-cd-release-pipeline-spec.md) | GitHub Actions per repo, Testcontainers w CI, SemVer/CalVer, release workflow, secret scanning | wszystkie 6 repo |
