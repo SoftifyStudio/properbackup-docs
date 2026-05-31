@@ -95,9 +95,11 @@ tematycznie, od najwyzszego priorytetu.
 | 1 | `EDGE-MONEY-01` | Karta 4000000000000341 (always decline) → checkout OK ale subscription incomplete → UI "karta odrzucona" | Playwright | 8.13 |
 | 2 | `EDGE-MONEY-02` | Browser back button po Stripe Checkout → brak duplikatu sesji | Playwright | 8.15 |
 | 3 | `EDGE-MONEY-03` | Webhook przychodzi PRZED redirect → frontend widzi aktywna subskrypcje bez ProcessingScreen | Playwright | 8.14 |
-| 4 | `EDGE-MONEY-04` | Live price config brakuje → clean error, nie fallback na test | API + Playwright | 8.18 |
-| 5 | `EDGE-MONEY-05` | Zmiana planu w trakcie processingu (double-click / Slow 3G) → jeden checkout | Playwright | 8.21 |
-| 6 | `EDGE-MONEY-06` | 10 rownoczesnych POST /checkout → 1 sesja Stripe (idempotency) | API | 8.2 |
+| 4 | `EDGE-MONEY-04` | Double-click „Rozpocznij trial" (3× w 500ms) → 1 request, 1 sesja Checkout, brak duplikatu w audit_log | Playwright | 8.21 |
+| 5 | `EDGE-MONEY-05` | Zmiana planu monthly → annual w trakcie checkout (back → annual) → nowa sesja, brak podwojnego obciazenia | Playwright | — |
+| 6 | `EDGE-MONEY-06` | Weryfikacja VAT w UI (brutto/netto/VAT 23%, oszczednosc roczna 38 PLN) | Playwright | — |
+
+> **Uwaga:** wczesniejsze warianty E1 — „brak live price config → clean error" (master-tdd-plan §8.18) oraz „10 rownoczesnych POST /checkout → idempotency" (§8.2) — przeniesione do backlogu. Idempotency webhooków pokrywa `EDGE-RACE-02` w Grupie E4.
 
 ### Grupa E2 — Trial Abuse & Auth Edge Cases
 
@@ -229,6 +231,9 @@ Serwer testowy: http://properbackup-test-server.softify.com.pl
 Kod testow:     properbackup-web/tests/e2e/
 Plan testow:    properbackup-docs/architecture/playwright-tdd-plan.md
 
+WZORZEC: reuzyj helperow rejestracji/weryfikacji-emaila/checkoutu z
+         tests/e2e/subscription-e2e.spec.js (SUB-01..SUB-10). Nie pisz ich od zera.
+
 TWOJE ZADANIE:
 Napisz i uruchom testy Playwright dla grupy [GRUPA_ID] z planu testowego.
 Plik docelowy: tests/e2e/[PLIK].spec.js
@@ -239,6 +244,7 @@ SCENARIUSZE DO POKRYCIA:
 ZASADY:
 1. Playwright chodzi NA TWOIM SRODOWISKU, testuje ZDALNY serwer (URL powyzej).
 2. Kazdy test tworzy unikalne konto e2e-{name}-{timestamp}@properbackup.dev.
+   Haslo nowych kont: sekret ${PROPERBACKUP_TEST_ACCOUNT_PASSWORD} (w env sesji).
 3. Karta testowa Stripe: 4242 4242 4242 4242 (exp: dowolna przyszla, CVC: dowolne).
 4. Karta decline: 4000000000000341 (przechodzi setup, odmawia platnosci).
 5. Video recording WLACZONE dla kazdego testu.

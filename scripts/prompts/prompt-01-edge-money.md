@@ -17,6 +17,11 @@ Repozytoria:
 
 Plan testowy: properbackup-docs/architecture/playwright-tdd-plan.md (sekcja 2, Grupa E1)
 
+WZORZEC (WAZNE): NIE pisz rejestracji/logowania/checkoutu od zera.
+  Reuzyj helperow z istniejacego tests/e2e/subscription-e2e.spec.js (SUB-01..SUB-10,
+  10/10 PASSED) — rejestracja, weryfikacja emaila i flow Checkout sa tam juz rozwiazane.
+  Te same wzorce zastosuj do scenariuszy edge-money.
+
 ═══════════════════════════════════════════════════════════════════════
 TWOJE ZADANIE:
 Napisz i uruchom testy Playwright dla 6 scenariuszy "Stripe & Money Edge Cases".
@@ -79,6 +84,8 @@ ZASADY:
 1. Playwright chodzi NA TWOIM SRODOWISKU (npx playwright test), testuje ZDALNY serwer.
 2. Zainstaluj Playwright: cd properbackup-web && npm install && npx playwright install chromium
 3. Kazdy test tworzy unikalne konto: e2e-money-{N}-{timestamp}@properbackup.dev
+   Haslo dla nowych kont: uzyj sekretu ${PROPERBACKUP_TEST_ACCOUNT_PASSWORD} (jest w env sesji).
+   Weryfikacja emaila: obsluz tak samo jak w subscription-e2e.spec.js (ten sam mechanizm).
 4. Karta testowa: 4242 4242 4242 4242, exp: 12/30, CVC: 123
 5. Karta decline: 4000000000000341, exp: 12/30, CVC: 123
 6. Video recording WLACZONE (video: 'on' w playwright.config.js)
