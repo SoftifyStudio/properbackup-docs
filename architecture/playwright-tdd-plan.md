@@ -88,18 +88,33 @@ Ponizsze scenariusze to **najwazniejsza czesc** tego planu. Kazdy edge case to
 potencjalna dziura bezpieczenstwa lub incydent finansowy. Testy pogrupowane
 tematycznie, od najwyzszego priorytetu.
 
-### Grupa E1 — Stripe & Money Edge Cases
+### Grupa E1 — Money Module Hardening (Prompt #1, petla dlugodystansowa)
 
-| # | ID | Scenariusz | Typ | Ref |
-|---|------|-----------|-----|-----|
-| 1 | `EDGE-MONEY-01` | Karta 4000000000000341 (always decline) → checkout OK ale subscription incomplete → UI "karta odrzucona" | Playwright | 8.13 |
-| 2 | `EDGE-MONEY-02` | Browser back button po Stripe Checkout → brak duplikatu sesji | Playwright | 8.15 |
-| 3 | `EDGE-MONEY-03` | Webhook przychodzi PRZED redirect → frontend widzi aktywna subskrypcje bez ProcessingScreen | Playwright | 8.14 |
-| 4 | `EDGE-MONEY-04` | Double-click „Rozpocznij trial" (3× w 500ms) → 1 request, 1 sesja Checkout, brak duplikatu w audit_log | Playwright | 8.21 |
-| 5 | `EDGE-MONEY-05` | Zmiana planu monthly → annual w trakcie checkout (back → annual) → nowa sesja, brak podwojnego obciazenia | Playwright | — |
-| 6 | `EDGE-MONEY-06` | Weryfikacja VAT w UI (brutto/netto/VAT 23%, oszczednosc roczna 38 PLN) | Playwright | — |
+> **Tryb:** Prompt #1 nie jest juz pojedynczym zestawem 6 testow — to **petla hardeningu**.
+> Agent pisze JAK NAJWIECEJ unhappy path / edge case, uruchamia na zywym serwerze i
+> iteruje (pisz → uruchom → diagnozuj → napraw kod ALBO przepisz zly test z adnotacja
+> w docs → powtarzaj) az modul platnosci jest **nie do zajechania**.
+> **Kanoniczna bateria scenariuszy:** `scripts/prompts/prompt-01-edge-money.md`.
 
-> **Uwaga:** wczesniejsze warianty E1 — „brak live price config → clean error" (master-tdd-plan §8.18) oraz „10 rownoczesnych POST /checkout → idempotency" (§8.2) — przeniesione do backlogu. Idempotency webhooków pokrywa `EDGE-RACE-02` w Grupie E4.
+Bateria (>40 scenariuszy, pogrupowana — szczegoly w prompcie):
+
+| Grupa | Zakres | Przyklady ID |
+|-------|--------|--------------|
+| A | Odrzucenia kart / bledy platnosci (decline codes) | `M-DECLINE-01..09` |
+| B | 3D Secure / SCA | `M-3DS-01..03` |
+| C | Cykl zycia subskrypcji (cancel, past_due, grace, up/downgrade) | `M-SUB-01..10` |
+| D | Webhooki i kolejnosc zdarzen (signature, out-of-order, clock skew) | `M-WEBHOOK-01..06` |
+| E | Idempotencja i race / concurrency | `M-IDEMP-01..04`, `M-RACE-01..02` |
+| F | Naduzycia / trial abuse / fraud | `M-ABUSE-01..05` |
+| G | Autoryzacja / bezpieczenstwo (IDOR, tampering ceny/kwoty) | `M-AUTHZ-01..06` |
+| H | Walidacja wejscia (email, zgoda art. 38, injection) | `M-INPUT-01..05` |
+| I | Poprawnosc pieniedzy / VAT / proration | `M-VAT-01..05` |
+| J | Odpornosc / awarie — fail-safe (DB down, Stripe timeout) | `M-RESIL-01..05` |
+
+**Reguly petli:** failure = albo (A) bug w kodzie → fix + osobny PR, albo (B) zle napisany
+test → przepisz i **wyraznie odnotuj w changelogu (Iteration log)**, albo (C) niejasne/ryzykowne
+→ zostaw FAIL + pytanie do Daniela („Do decyzji"). Zakaz oslabiania asercji / mockowania /
+skipow — zielony przez oszustwo jest gorszy niz czerwony.
 
 ### Grupa E2 — Trial Abuse & Auth Edge Cases
 
