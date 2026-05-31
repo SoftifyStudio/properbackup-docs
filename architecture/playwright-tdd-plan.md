@@ -116,6 +116,10 @@ test → przepisz i **wyraznie odnotuj w changelogu (Iteration log)**, albo (C) 
 → zostaw FAIL + pytanie do Daniela („Do decyzji"). Zakaz oslabiania asercji / mockowania /
 skipow — zielony przez oszustwo jest gorszy niz czerwony.
 
+**Odwracalnosc:** kazda naprawa kodu = jeden atomowy commit (`fix(money): ... [M-XXX-NN]`),
+w changelogu tabela `repo | plik | SHA | PR | jak cofnac (git revert)`. Bez duzych refaktorow —
+Daniel ma moc cofnac dowolny pojedynczy fix.
+
 ### Grupa E2 — Trial Abuse & Auth Edge Cases
 
 | # | ID | Scenariusz | Typ | Ref |

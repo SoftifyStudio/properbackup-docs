@@ -175,6 +175,13 @@ ZASADY (twarde):
    PR w odpowiednim repo (web/buffer/shared), z opisem w changelogu.
 9. PRZEPISANIE TESTU jest dozwolone TYLKO gdy test byl faktycznie zle napisany —
    musisz to WYRAZNIE udokumentowac w "Iteration log" (co i dlaczego).
+10. ODWRACALNOSC (WAZNE dla Daniela): kazda naprawa kodu MUSI byc do cofniecia.
+    - JEDEN bug = JEDEN maly, atomowy commit (nie mieszaj kilku fixow w jednym).
+    - Commit message: "fix(money): <bug> [M-XXX-NN]" — z ID scenariusza.
+    - W changelogu zapisz dla kazdego fixu: repo, plik(i), commit SHA, PR,
+      1 zdanie "jak to cofnac" (np. `git revert <SHA>`).
+    - NIE rob duzych refaktorow przy okazji. Zmiana ma byc minimalna i punktowa,
+      zeby Daniel mogl przywrocic dowolny pojedynczy fix bez ruszania reszty.
 
 ANTY-OSZUSTWO (krytyczne — zielony przez oszustwo jest GORSZY niz czerwony):
   - NIGDY nie oslabiaj asercji, zeby test przeszedl.
@@ -213,7 +220,8 @@ Plik: properbackup-docs/changelog/{data}-money-hardening-e2e.md
   - naglowek "# {data} — Money Module Hardening (E2E)"
   - lista PR-ow (web / buffer / shared / docs)
   - TABELA WYNIKOW: ID | scenariusz | status (PASS/FAIL/DECYZJA) | uwagi
-  - sekcja "Naprawione bugi": co bylo zle w kodzie, jak naprawione, ktory PR
+  - sekcja "Naprawione bugi": TABELA repo | plik | commit SHA | PR | co bylo zle |
+    jak naprawione | jak cofnac (git revert <SHA>) — kazdy fix osobny wiersz
   - sekcja "Iteration log": ktore testy byly ZLE NAPISANE i jak je poprawiono (wymagane)
   - sekcja "Do decyzji": pozycje (C) czekajace na Daniela
   - linki do nagran w e2e-videos/{data}/ + wpis w e2e-videos/README.md
