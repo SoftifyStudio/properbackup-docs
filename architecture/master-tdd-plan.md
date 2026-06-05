@@ -449,6 +449,44 @@ Kanoniczna tabela odpowiedzi `SubscriptionGuard`:
 > `status='unpaid'` lub `customer.subscription.deleted`. **Nigdy** nie
 > przechodzimy na suspended z naszej strony przed Stripe.
 
+> ### ⚠️ OPEN DECISION D-1 — `canRestore` po wygasnieciu (czeka na decyzje Daniela)
+>
+> Ten dokument (tabela §5.3) mowi: `none` i `expired (canceled)` => `canRestore=false`.
+> `subscription-expiration-handling.md` §2 mowi cos PRZECIWNEGO:
+> `fun canRestore(s) = true   // restore zawsze dozwolony (anti-hostage)`.
+>
+> To NIE jest kosmetyka — to decyzja produktowa „czy trzymamy dane klienta jako
+> zakladnika, gdy przestal placic". Pierwszy test, ktory agent napisze, zakoduje
+> jedna z dwoch sprzecznych prawd. **Agent NIE MOZE wybrac samodzielnie** — patrz
+> Dodatek F.
+>
+> **Rekomendacja (do potwierdzenia):** anti-hostage — `canRestore=true` w KAZDYM
+> stanie (lacznie z `expired`/`none`), `canUpload` blokowany. Dane sa cenne dla
+> retencji i odzyskania klienta; zablokowanie restore tworzy ryzyko prawne (RODO
+> art. 20 — przenoszalnosc) i wizerunkowe wieksze niz koszt par GB w cold tier.
+> Patrz tez `ovh-cloud-archive-migration-spec.md` (HR-7: cold tier, NIE delete).
+>
+> ### ⚠️ OPEN DECISION D-2 — jedna maszyna stanow (czeka na D-1)
+>
+> Sa DWIE maszyny stanow, obie nazwane „single source of truth", o roznych nazwach
+> stanow i — co gorsza — `subscription-expiration-handling.md` §1 **w ogole nie ma
+> stanow past_due** (dunning), choc Test 10 i §9.4 ich wymagaja.
+>
+> | Ten dokument (§5.2/§5.3) | `subscription-expiration-handling.md` §1 |
+> |---|---|
+> | `none` | `LOCKED_TRIAL` / `LOCKED_EXPIRED` (brak rozroznienia none) |
+> | `trialing` | `TRIAL` |
+> | `active` | `ACTIVE_SUB` |
+> | `active + cancel_at_period_end` | `CANCELLED_GRACE` |
+> | `past_due_grace` | **(brak)** |
+> | `past_due_suspended` | **(brak)** |
+> | `expired` | `LOCKED_EXPIRED` |
+>
+> **Kanon (proponowany):** maszyna stanow z §5.2/§5.3 tego dokumentu jest jedyna
+> obowiazujaca dla billingu/dunningu. `subscription-expiration-handling.md` musi
+> zostac rozszerzony o `past_due_grace`/`past_due_suspended` i uzgodnic nazwy, albo
+> jawnie deklarowac, ze jest tylko uproszczonym „widokiem dostepu" mapowanym z kanonu.
+
 ### 5.4. Mapowanie statusow Stripe -> nasz `subscription_payment_status`
 
 | Stripe sub.status | Nasze `subscription_payment_status` | Nasze `subscription_plan` |
@@ -1399,6 +1437,90 @@ THEN:  deleted aplikuje sie tylko jezeli last_stripe_event_at < deleted.created.
        Jezeli completed przyszedl pozniej z eventCreated < deleted.created -> ignore.
 ```
 
+### 8.31. Money: chargeback / spor (`charge.dispute.created`)
+
+**Status:** BRAK pokrycia. To realna utrata kasy + oplata Stripe za dispute (~15 USD).
+
+```
+GIVEN: aktywny user, ktory zlozyl chargeback na ostatnia fakture
+WHEN:  Stripe wysyla webhook charge.dispute.created
+THEN:  - subscription_audit_log INSERT action='dispute_opened' (kwota, reason)
+       - users.dispute_open = true (NOWA kolumna)
+       - SubscriptionGuard: canUpload=false (wstrzymujemy nowe koszty storage),
+         canRestore wg OPEN DECISION D-1
+       - alert do operatora (manualna decyzja: bronic czy odpuscic)
+
+GIVEN: spor rozstrzygniety na nasza korzysc
+WHEN:  webhook charge.dispute.closed (status='won')
+THEN:  users.dispute_open=false, audit action='dispute_won', dostep przywrocony
+
+GIVEN: spor przegrany (status='lost')
+WHEN:  charge.dispute.closed
+THEN:  traktujemy jak nieoplacony okres -> przejscie do expired wg maszyny stanow,
+       audit action='dispute_lost'. NIE kasujemy danych (cold tier).
+```
+
+**Allowlist webhookow (§trial-abuse §6.3) musi zostac rozszerzona** o
+`charge.dispute.created|closed` — inaczej wpadna w `200 OK + ignor`.
+
+### 8.32. Webhook: `customer.subscription.trial_will_end` (T-3 dni)
+
+**Status:** dunning trialu (§9.4) mowi o e-mailach T-3/T-1, ale NIE mapuje konkretnego
+eventu Stripe, ktory je wyzwala.
+
+```
+GIVEN: trial konczy sie za 3 dni (Stripe wysyla trial_will_end domyslnie na 3 dni przed)
+WHEN:  webhook customer.subscription.trial_will_end
+THEN:  - email „Twoj trial konczy sie DD.MM — pierwsza platnosc zostanie pobrana"
+       - idempotencja przez users.last_trial_notification='trial_will_end'
+       - audit action='trial_will_end_notified'
+```
+
+Dodac `customer.subscription.trial_will_end` do allowlisty webhookow.
+
+### 8.33. Money: kredyt na `customer.balance` a faktura VAT (korekta)
+
+**Status:** BRAK. §8.5 i `downgrade-logic.md` (capped+overflow) kieruja nadwyzke proracji
+na `customer.balance`, ale brak reguly jak to sie ma do polskiej faktury VAT.
+
+```
+GIVEN: downgrade annual(300d)->monthly generuje overflow kredytu na customer.balance
+WHEN:  kolejna invoice.paid wykorzystuje czesc kredytu
+THEN:  - kwota faktury netto/VAT liczona od FAKTYCZNIE pobranej kwoty (po kredycie),
+         nie od cennika
+       - jezeli kredyt > kwota faktury -> faktura na 0 PLN, brak VAT do odprowadzenia
+       - audit action='invoice_paid_with_balance_credit' (kwota brutto, uzyty kredyt)
+```
+
+Decyzja ksiegowa (do potwierdzenia z Danielem): czy uzywamy Stripe Tax/Invoicing do
+automatycznych korekt, czy kredyt traktujemy jako rabat handlowy na nastepna FV.
+
+### 8.34. Migracja ceny planu dla istniejacych subskrybentow
+
+**Status:** BRAK. `stripe_price_config` ma (plan, mode), ale brak procedury podniesienia
+ceny (np. 19->24 PLN) bez psucia aktywnych subskrypcji.
+
+```
+GIVEN: tworzymy nowy price_id z wyzsza cena
+WHEN:  istniejacy subskrybent odnawia sie
+THEN:  - grandfathering: aktywni subskrybenci zostaja na starym price_id do anulowania
+         (decyzja produktowa) LUB migracja z 30-dniowym wyprzedzeniem (email)
+       - NOWI klienci dostaja nowy price_id z stripe_price_config
+       - audit action='price_migration' przy zmianie
+```
+
+### 8.35. Waluta presentment (defensywnie)
+
+**Status:** BRAK asercji. Cennik jest w PLN; trzeba potwierdzic, ze nie przyjmujemy
+faktur w innej walucie.
+
+```
+GIVEN: webhook invoice.paid z currency != 'pln'
+WHEN:  przetwarzamy event
+THEN:  - log.error „unexpected currency", audit action='currency_mismatch'
+       - NIE zmieniamy planu na podstawie nieoczekiwanej waluty (fail-safe)
+```
+
 ---
 
 ## 9. Specyfikacja techniczna nowych komponentow
@@ -1622,6 +1744,11 @@ Kazdy test z sekcji 7+8 jest "Done" gdy spelnia **wszystkie** ponizsze:
 10. **Brak zmian w plikach z sekcji 4.2 (NIE RUSZAJ)**, weryfikowalne
     `git diff --stat` w PR.
 
+11. **Nagranie E2E zapisane i podlinkowane** (dla testow z powierzchnia UI / Playwright):
+    natywne wideo Playwright (`video:'on'`, NIE nagrywarka ekranu) lezy w
+    `properbackup-docs/e2e-videos/<YYYY-MM-DD>-<temat>/testNN-opis.webm`, a tabela
+    statusow (§11.2) ma wpis `PASS` + sciezke do pliku. Patrz protokol §11.1.
+
 ---
 
 ## 11. TDD Workflow Protocol (jak agent ma pracowac)
@@ -1689,6 +1816,55 @@ Dla **kazdego** punktu z sekcji 7/8, agent wykonuje sciscle:
 └────────────────────────────────────────────────────────────────────┘
 ```
 
+### 11.1. RECORD & WRITE-BACK — nagrania E2E w petli (OBOWIAZKOWE)
+
+> To jest brakujacy dotad, jawny protokol „kazde nagranie -> docs + petla
+> samopoprawiania", o ktorym mowi sie przy delegacji. Dotyczy KAZDEGO testu
+> z powierzchnia UI/Playwright (Grupa A–H web, Filar P1, SSE/ProcessingScreen,
+> trial abuse UI, dunning banner). Testy czysto backendowe (Kotlin/Testcontainers)
+> nie wymagaja wideo — wystarcza zielony suite + audit log.
+
+Petla (rozszerza Krok 3–5 powyzej dla testow E2E):
+
+```
+1. RED   — napisz failing test Playwright. Playwright config: video:'on',
+           trace:'on-first-retry'. Uruchom -> potwierdz CZERWONY.
+2. WATCH  — OBEJRZYJ wlasne nagranie (.webm) + trace + loga backendu.
+           Zdiagnozuj DOKLADNIE gdzie system „przecieka" (nie zgaduj).
+3. GREEN  — minimalna poprawka w strefie DOTYKAJ. Uruchom ponownie.
+4. PROOF  — test musi byc zielony 2x POD RZAD (anty-flake), workers=1.
+5. WRITE-BACK (do tego repo, properbackup-docs):
+     a) skopiuj wideo do  e2e-videos/<YYYY-MM-DD>-<temat>/testNN-opis.webm
+        (np. e2e-videos/2026-06-05-billing-hardening/test07-trial-abuse.webm)
+        — katalog per data+temat, append-only, NIE nadpisuj starych zestawow.
+     b) dopisz wiersz do tabeli §11.2 (i do e2e-videos/README.md): test, wynik,
+        czas, sciezka do .webm, link do commita implementacji.
+     c) jezeli WATCH ujawnil kolejny przeciek -> wroc do RED z nowym testem.
+6. LOOP   — powtarzaj az caly cel (np. [TDD-E1]) jest zielony i nagrany.
+```
+
+Zasady twarde dla nagran:
+- Natywne wideo Playwright, NIE nagrywanie ekranu Devina (deterministyczne, male).
+- Konta testowe `*@properbackup.dev`, czyszczenie `stripe_card_fingerprint` przed grupa.
+- Wideo to DOWOD, nie ozdoba: jezeli nie ma wideo zielonego testu, test nie jest „Done"
+  (patrz DoD §10 pkt 11).
+
+### 11.2. Tabela statusow + nagran (agent UTRZYMUJE na biezaco)
+
+> Agent aktualizuje te tabele po KAZDYM zielonym tescie E2E. To jest miejsce, w
+> ktorym „oznacza test jako PASSED i wskazuje sciezke do nagrania". Lustrzana kopia
+> tabeli zyje w `e2e-videos/README.md` (indeks dla czlowieka).
+
+| Test | Cel | Status | Nagranie (.webm) | Commit impl. |
+|------|-----|--------|------------------|--------------|
+| [TDD-A1] | rejestracja -> pending payment | _do uzupelnienia_ | — | — |
+| [TDD-B2] | webhook sig + idempotency + DLQ | _do uzupelnienia_ | — | — |
+| [TDD-E1] | trial abuse (fingerprint + heurystyki) | _do uzupelnienia_ | — | — |
+| [TDD-F1] | SSE processing screen | _do uzupelnienia_ | — | — |
+| [TDD-H1] | dunning (past_due + email + banner) | _do uzupelnienia_ | — | — |
+
+(Agent rozszerza tabele o wszystkie pokrywane [TDD-Xn]/[TDD-EDGE-n].)
+
 **Czerwone linie ktorych nie wolno przekroczyc:**
 
 - NIE komituj implementacji bez wczesniejszego czerwonego testu w tym samym branchu.
@@ -1725,6 +1901,11 @@ Zasady twardych:
 - Master TDD Plan (docs/architecture/master-tdd-plan.md) jest twoim
   pojedynczym punktem prawdy. Trzymasz sie sekcji DOTYKAJ vs NIE RUSZAJ.
 - Czerwony test PIERWSZY, kod drugi. Bez wyjatkow.
+- Dla testow z UI: petla RECORD & WRITE-BACK (§11.1) — nagraj, OBEJRZYJ wlasne
+  nagranie zeby zdiagnozowac przeciek, popraw, nagraj ponownie. Kazde zielone
+  nagranie ladzie w docs/e2e-videos/<data>-<temat>/ + wpis w tabeli §11.2.
+- Sprzecznosci miedzy specami (np. OPEN DECISION D-1 canRestore) -> NIE wybieraj
+  sam. Zatrzymaj sie i zapytaj Daniela (Dodatek F).
 - Wszystkie testy logiki bazodanowej dzialaja na Testcontainers PostgreSQL.
 - Outbound API call do Stripe -> ZAWSZE Idempotency-Key.
 - Inbound webhook -> ZAWSZE signature verify + idempotency claim + audit log.
@@ -1765,7 +1946,7 @@ Przed flip'em pierwszego usera na `stripe_test_mode=FALSE`:
 - [ ] CALY suite `StripePerModeIsolationTest.kt` zielony
 - [ ] CALY suite `StorageQuotaGuardIntegrationTest.kt` zielony
 - [ ] Playwright E2E (10/10) zielony na `properbackup-test-server`
-- [ ] Manualne nagrania video kazdego z 10 testow (przechowywane w `properbackup-docs/e2e-videos/`)
+- [ ] Natywne nagrania Playwright kazdego z 10 testow w `properbackup-docs/e2e-videos/<data>-<temat>/` (protokol §11.1), kazdy zielony 2x pod rzad, wpisany do tabeli §11.2 + `e2e-videos/README.md`
 
 ### 13.3. Operacyjne
 
@@ -1892,6 +2073,23 @@ Swiadomie poza scope tego dokumentu (oddzielne plany w przyszlosci):
 **Zasada smyczy:** delegując zadanie agentowi, wskaż konkretny spec + sekcję LLD
 + numery niezmienników, które kod musi spełnić (np. „zaimplementuj redeem promo
 wg `promo-codes.md` §5, niezmienniki anty-TOCTOU"). Nie „napisz system promo".
+
+---
+
+## Dodatek F — Otwarte decyzje (czekaja na Daniela)
+
+> Sprzecznosci miedzy specami, ktorych agent **NIE MOZE** rozstrzygac sam. Kazda
+> blokuje napisanie testu, bo test zakodowalby jedna z dwoch sprzecznych prawd.
+> Po decyzji: usun wpis stad i zsynchronizuj WSZYSTKIE dokumenty wymienione w „Dotyka".
+
+| # | Decyzja | Konflikt | Dotyka | Rekomendacja | Status |
+|---|---------|----------|--------|--------------|--------|
+| **D-1** | `canRestore` po wygasnieciu (trzymamy dane jako zakladnika?) | §5.3 (`expired=>false`) vs `subscription-expiration-handling.md` §2 (`=true` anti-hostage) | `master-tdd-plan.md` §5.3, `subscription-expiration-handling.md` §1–§2, `user-facing-recovery-spec.md` | **anti-hostage** (`canRestore=true` zawsze, `canUpload` blokowany) — RODO art. 20 + retencja klienta | OTWARTA |
+| **D-2** | Jedna kanoniczna maszyna stanow | dwie FSM, druga bez stanow past_due | jw. | kanon = §5.2/§5.3; expiration-handling jako mapowany „widok dostepu" | OTWARTA (po D-1) |
+| **D-3** | Model trialu: card-first vs od-rejestracji | §5.1 (card-first) vs `trial-abuse-prevention.md` §1 + `subscription-expiration-handling.md` §6 (od rejestracji) | te 3 dokumenty | **card-first** (zgodnie z biznesplanem v6.2 i decyzja 2026-05-24) | OTWARTA |
+| **D-4** | Kredyt `customer.balance` a faktura VAT | §8.33 brak reguly ksiegowej | §8.5, §8.33, `downgrade-logic.md` | Stripe Invoicing z automatyczna korekta (do potw. ksiegowo) | OTWARTA |
+| **D-5** | Baza pomiaru quota/ceny: FIZYCZNE bajty (z historią) vs LOGICZNY bieżący rozmiar | przy HR-1 (immutable, nigdy nie delete) fizyczne miejsce rośnie wiecznie; `StorageQuotaGuard` liczy `used_bytes` ale baza nie jest jawnie zdefiniowana | `pricing-and-storage-economics.md`, `ovh-cloud-archive-migration-spec.md` §4.2/§4.4/HR-1, `StorageQuotaGuard.kt` (TDD-G1) | **Opcja A** — fizyczne bajty z historią (jedyna spójna z HR-1 „keep forever"; Opcja B = strukturalna strata) + mocny dedup jako warunek | OTWARTA |
+| **D-6** | Zachowanie przy downgrade POJEMNOŚCI (np. 1 TB→500 GB gdy zużyte 800 GB) | `downgrade-logic.md` obsługuje tylko zmianę okresu (monthly↔annual), nie pojemności; przy HR-1 miejsca nie da się zwolnić | `downgrade-logic.md`, `pricing-and-storage-economics.md`, `StorageQuotaGuard.kt` | blokada downgrade poniżej zużycia LUB grace + brak nowych uploadów (do decyzji po D-5) | OTWARTA (po D-5) |
 
 ---
 
