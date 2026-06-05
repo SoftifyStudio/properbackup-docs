@@ -6,6 +6,18 @@ Automated Playwright E2E tests run against live test server (`properbackup-test-
 **Result:** 10/10 PASSED (9.6 minutes total)  
 **Test code:** [`properbackup-web/tests/e2e/`](https://github.com/SoftifyStudio/properbackup-web/tree/main/tests/e2e)
 
+## Konwencja nagrań (protokół RECORD & WRITE-BACK)
+
+Pełny protokół: [`architecture/master-tdd-plan.md` §11.1](../architecture/master-tdd-plan.md). W skrócie:
+
+- **Natywne wideo Playwright** (`video:'on'`), NIE nagrywanie ekranu Devina — deterministyczne i małe.
+- **Katalog per data + temat:** `e2e-videos/<YYYY-MM-DD>-<temat>/` (np. `2026-06-05-billing-hardening/`). Append-only — nie nadpisuj starych zestawów.
+- **Nazewnictwo:** `testNN-krotki-opis.webm`.
+- **Każdy zielony test 2× pod rząd** (anty-flake), `workers=1`.
+- Po zielonym teście agent dopisuje wiersz do tabeli poniżej **oraz** do tabeli statusów w `master-tdd-plan.md` §11.2 (link do `.webm` + commita implementacji). Brak wideo zielonego testu = test nie jest „Done" (DoD §10 pkt 11).
+
+> **Legacy / do konsolidacji:** pliki `testNN-*.webm` leżące płasko w katalogu głównym to starszy zestaw zduplikowany z `2026-05-26-fixes/`. Aktualny indeks to tabele poniżej; płaskie pliki traktuj jako archiwum (kandydat do usunięcia w osobnym PR porządkowym).
+
 ## Videos (2026-05-26 — with fixes)
 
 Directory: `2026-05-26-fixes/`

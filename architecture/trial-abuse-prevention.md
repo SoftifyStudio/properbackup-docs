@@ -18,6 +18,15 @@ To powodowało, że:
 
 ## Rozwiązanie
 
+> ⚠️ **OPEN DECISION D-3 (model trialu).** Sekcja 1 poniżej opisuje **legacy**
+> model „trial ustawiany przy rejestracji". `master-tdd-plan.md` §5.1 deklaruje
+> obecny kanon: **card-first** — trial startuje dopiero po udanym Stripe Checkout
+> (bez karty `subscription_status='none'`, `trial_expires_at` pozostaje NULL).
+> W modelu card-first AV-1 (nowy e-mail) słabnie, a AV-2 (fingerprint karty)
+> staje się główną bramą. Do rozstrzygnięcia (`master-tdd-plan.md` Dodatek F, D-3)
+> traktuj card-first jako obowiązujący; poniższy kod registration-time zostaw jako
+> tło historyczne.
+
 ### 1. Trial ustawiany przy rejestracji (UserStore.kt)
 
 ```kotlin
