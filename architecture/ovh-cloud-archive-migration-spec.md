@@ -1,8 +1,18 @@
 # OVH Cloud Archive — Migration & Live Storage Master Plan
 
+> ⚠️ **SUPERSEDED / UNDER REVIEW (2026-06-05).** Po realnej pracy z OVH Cloud Archive
+> (Swift) podjęto decyzję o **odejściu od tego backendu** — powód operacyjny i zaufania
+> (segmenty DLO/SLO, odmrażanie archiwum, osierocone segmenty po kasowaniu, opłaty za
+> gotowość), nie cenowy. Aktualny kierunek i porównanie alternatyw:
+> **[`storage-backend-decision.md`](storage-backend-decision.md)**.
+>
+> Ten dokument zostaje jako referencja (koncepcje immutability HR-1/HR-2, multipart, DR),
+> ale części Swift-specyficzne (segmenty, freeze/unfreeze, cutover OVH) są **nieaktualne**
+> do czasu wyboru nowego backendu (Backblaze B2 / Hetzner Storage Box / inne — patrz dok. wyżej).
+
 Wersja: 1.1 (initial, pre-prod) — **2026-05-26: dodano sekcje 0 Hard Requirements (Daniel ack: immutable storage, FTP-style upload+list only)**
 Repo glowne: `properbackup-buffer/.../ovh/`
-Status: SPEC — czeka na implementacje przez kolejnego agenta
+Status: **SUPERSEDED / UNDER REVIEW** — backend reotwierany, patrz `storage-backend-decision.md`
 Priorytet: **P1** (przed flipnieciem pierwszego prawdziwego klienta na live)
 
 ---
