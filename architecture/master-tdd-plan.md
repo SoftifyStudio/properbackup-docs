@@ -2088,6 +2088,8 @@ wg `promo-codes.md` §5, niezmienniki anty-TOCTOU"). Nie „napisz system promo"
 | **D-2** | Jedna kanoniczna maszyna stanow | dwie FSM, druga bez stanow past_due | jw. | kanon = §5.2/§5.3; expiration-handling jako mapowany „widok dostepu" | OTWARTA (po D-1) |
 | **D-3** | Model trialu: card-first vs od-rejestracji | §5.1 (card-first) vs `trial-abuse-prevention.md` §1 + `subscription-expiration-handling.md` §6 (od rejestracji) | te 3 dokumenty | **card-first** (zgodnie z biznesplanem v6.2 i decyzja 2026-05-24) | OTWARTA |
 | **D-4** | Kredyt `customer.balance` a faktura VAT | §8.33 brak reguly ksiegowej | §8.5, §8.33, `downgrade-logic.md` | Stripe Invoicing z automatyczna korekta (do potw. ksiegowo) | OTWARTA |
+| **D-5** | Baza pomiaru quota/ceny: FIZYCZNE bajty (z historią) vs LOGICZNY bieżący rozmiar | przy HR-1 (immutable, nigdy nie delete) fizyczne miejsce rośnie wiecznie; `StorageQuotaGuard` liczy `used_bytes` ale baza nie jest jawnie zdefiniowana | `pricing-and-storage-economics.md`, `ovh-cloud-archive-migration-spec.md` §4.2/§4.4/HR-1, `StorageQuotaGuard.kt` (TDD-G1) | **Opcja A** — fizyczne bajty z historią (jedyna spójna z HR-1 „keep forever"; Opcja B = strukturalna strata) + mocny dedup jako warunek | OTWARTA |
+| **D-6** | Zachowanie przy downgrade POJEMNOŚCI (np. 1 TB→500 GB gdy zużyte 800 GB) | `downgrade-logic.md` obsługuje tylko zmianę okresu (monthly↔annual), nie pojemności; przy HR-1 miejsca nie da się zwolnić | `downgrade-logic.md`, `pricing-and-storage-economics.md`, `StorageQuotaGuard.kt` | blokada downgrade poniżej zużycia LUB grace + brak nowych uploadów (do decyzji po D-5) | OTWARTA (po D-5) |
 
 ---
 

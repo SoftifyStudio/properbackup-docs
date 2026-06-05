@@ -219,6 +219,19 @@ Dlaczego:
 
 **Ceny SA przyklady — sprawdz aktualne na ovh.com/pl/public-cloud/cloud-archive/**
 
+> ### ⚠️ KOREKTA (2026-06-05, decyzja Daniela) — jedziemy PŁASKI single-tier
+>
+> W praktyce **rezygnujemy z tieringu hot/cold/frozen.** OVH typowo ma jedną cenę;
+> tańszy cold (~20% taniej) **nie jest wart** dodatkowej złożoności (lifecycle policy,
+> rehydratacja 4–12h, ryzyko awarii w cutoverze) względem oszczędności.
+>
+> **Stawka robocza:** `0,009636 PLN netto/GiB/mc` (≈ 12,1 zł brutto/TB/mc) — jedna,
+> płaska, niezależnie od wieku obiektu. Zapis (ingest) `0,04 PLN netto/GiB` jednorazowo.
+>
+> Tabela hot/cold/frozen powyżej jest **teoretyczna / superseded** — zostaje jako
+> kontekst, ale model kosztowy i `OvhCostFetcher` liczą płaską stawkę.
+> Pełna analiza: `pricing-and-storage-economics.md`.
+
 **Lifecycle policy:**
 - Plik > 90 dni bez restore -> tier transition `hot -> cold`
 - Plik > 1 rok bez restore -> `cold -> frozen` (lub planowany delete dla wygaslych userow)
@@ -265,6 +278,17 @@ Z cold/frozen tier:
 Klient placi 19 PLN/mies Hobby (na 100 GB) → margin ujemny jezeli klient utrzymuje pelnie 100 GB. Dlatego:
 - **Limit 100 GB Hobby** wymaga zeby sredni klient nie wykorzystywal pelni
 - **W biznesplanie sredni klient ma 30-50 GB** → margin pozytywny
+
+> ### ⚠️ KOREKTA (2026-06-05) — założenie „średni klient 30–50 GB" NIE trzyma się dla niszy MC
+>
+> Założenie powyżej jest **obalone** dla realnego segmentu (serwery Minecraft z mapami
+> 700 GB+, codzienny churn regionów). Dla takiego klienta storage NIE jest groszowy —
+> jest dominującym kosztem. Dodatkowo **immutability (HR-1) sprawia, że FIZYCZNIE
+> zajęte miejsce rośnie wiecznie** (każda wersja zostaje), nawet gdy „bieżące" dane
+> stoją w miejscu. Rentowność zależy od tego, **czy quota i cena liczą się od
+> fizycznych bajtów z historią (Opcja A) czy od logicznego bieżącego rozmiaru (Opcja B)** —
+> przy płaskiej stawce Opcja B to ścieżka straty. Pełna analiza + liczby:
+> **`pricing-and-storage-economics.md`**. Decyzja: Dodatek F → **D-5** w `master-tdd-plan.md`.
 
 **Implementacja monitoringu:** `[OVH-D1]` (sekcja 5).
 
