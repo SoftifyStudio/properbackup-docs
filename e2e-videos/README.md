@@ -6,6 +6,18 @@ Automated Playwright E2E tests run against live test server (`properbackup-test-
 **Result:** 10/10 PASSED (9.6 minutes total)  
 **Test code:** [`properbackup-web/tests/e2e/`](https://github.com/SoftifyStudio/properbackup-web/tree/main/tests/e2e)
 
+## Konwencja nagrań (protokół RECORD & WRITE-BACK)
+
+Pełny protokół: [`architecture/master-tdd-plan.md` §11.1](../architecture/master-tdd-plan.md). W skrócie:
+
+- **Natywne wideo Playwright** (`video:'on'`), NIE nagrywanie ekranu Devina — deterministyczne i małe.
+- **Katalog per data + temat:** `e2e-videos/<YYYY-MM-DD>-<temat>/` (np. `2026-06-05-billing-hardening/`). Append-only — nie nadpisuj starych zestawów.
+- **Nazewnictwo:** `testNN-krotki-opis.webm`.
+- **Każdy zielony test 2× pod rząd** (anty-flake), `workers=1`.
+- Po zielonym teście agent dopisuje wiersz do tabeli poniżej **oraz** do tabeli statusów w `master-tdd-plan.md` §11.2 (link do `.webm` + commita implementacji). Brak wideo zielonego testu = test nie jest „Done" (DoD §10 pkt 11).
+
+> **Legacy / do konsolidacji:** pliki `testNN-*.webm` leżące płasko w katalogu głównym to starszy zestaw zduplikowany z `2026-05-26-fixes/`. Aktualny indeks to tabele poniżej; płaskie pliki traktuj jako archiwum (kandydat do usunięcia w osobnym PR porządkowym).
+
 ## Videos (2026-05-26 — with fixes)
 
 Directory: `2026-05-26-fixes/`
@@ -37,6 +49,29 @@ Test code: [`properbackup-web/tests/e2e/recovery-e2e.spec.js`](https://github.co
 ### Key fixes in this run vs previous:
 - **Test 7:** Backend now blocks Account B via card fingerprint validation in PostgreSQL + `abuse_blocked` flag in `activateSubscription` transaction
 - **Test 10:** Backend sets `past_due` status + 7-day grace period instead of immediate lockout. Frontend shows yellow warning banner.
+
+## Videos (2026-05-31 — money module hardening)
+
+Directory: `2026-05-31/`
+
+**41/41 PASSED** (12.7 min, 1 worker, zero retries). Full payment module hardening.
+
+20 .webm recordings from browser-based tests (API-only tests have no video):
+
+| Group | Tests | Coverage |
+|-------|-------|----------|
+| A (9) | M-DECLINE-01..09 | Card declines: generic, insufficient_funds, lost, stolen, expired, CVC, processing_error, charge-fail, Radar |
+| B (2) | M-3DS-01..02 | 3D Secure: auth success/fail |
+| C (5) | M-SUB-01..06 | Subscription lifecycle: abandoned, double-sub, cancel, reactivate, past_due |
+| F (2) | M-ABUSE-01,05 | Trial abuse: card fingerprint, expired trial retry |
+
+API-only tests (no video): WEBHOOK-03/04, IDEMP-02/03, ABUSE-03, AUTHZ-01..06, INPUT-01..05, VAT-01..03, RESIL-02/05, EDGE-01..04
+
+### Bugs found and fixed (2 × A-type):
+1. `StripeHandler.kt` — invalid `plan` → 503 NPE. Fixed: `plan in listOf("monthly", "annual")` guard → 400.
+2. `AuthHandler.kt` — email >64 chars / invalid format / SQL injection → 500. Fixed: regex + length validation → 400.
+
+Test code: [`properbackup-web/tests/e2e/edge-money-e2e.spec.js`](https://github.com/SoftifyStudio/properbackup-web/tree/main/tests/e2e/edge-money-e2e.spec.js)
 
 ## Jak odpalić testy
 

@@ -6,6 +6,12 @@ System obsługuje dwa typy wygasania:
 1. **Trial** — `trial_expires_at` (30 dni od rejestracji)
 2. **Subskrypcja** — `subscription_expires_at` (ustawiane przez Stripe webhook)
 
+> ⚠️ **OPEN DECISION D-3 (model trialu).** Powyższy opis „30 dni od rejestracji"
+> jest niezgodny z `master-tdd-plan.md` §5.1, który deklaruje model **card-first**
+> (trial startuje dopiero po udanym Stripe Checkout). Do czasu rozstrzygnięcia (patrz
+> `master-tdd-plan.md` Dodatek F, D-3) traktuj card-first jako kanon. Rekomendacja:
+> card-first — bez karty `subscription_status='none'`, brak `trial_expires_at`.
+
 ### Backend (StripeHandler / UserStore)
 
 Porównanie timestamp-based w Kotlin:
@@ -106,6 +112,13 @@ Subskrypcja aktywna (nowy okres)
 > Dane NIE są kasowane przy wygaśnięciu — patrz `ovh-cloud-archive-migration-spec.md`
 > (HR-7: cold tier, NIE delete).
 
+> ⚠️ **OPEN DECISION D-1 / D-2.** Ta FSM (`canRestore` zawsze true, patrz §2)
+> jest **sprzeczna** z `master-tdd-plan.md` §5.3 (`expired`/`none` => `canRestore=false`)
+> i **nie zawiera stanów `past_due_grace`/`past_due_suspended`** wymaganych przez
+> dunning (Test 10, §9.4). Kanon billingu to FSM z `master-tdd-plan.md` §5.2/§5.3.
+> Rozstrzygnięcie: `master-tdd-plan.md` Dodatek F (D-1 = anti-hostage rekomendowane,
+> D-2 = jedna maszyna stanów). NIE koduj testu, póki D-1 nie jest rozstrzygnięte.
+
 ## 2. Jedna funkcja prawdy
 
 ```kotlin
@@ -132,6 +145,11 @@ object AccessBoundary {
 - **canRestore zawsze true** — nigdy nie bierzemy danych klienta „na zakładnika".
 - `AccessBoundary.evaluate` to jedyne miejsce decyzji; UI dostaje `accessState` z API
   (`GET /api/account/status`), agent dostaje `canUpload` w heartbeacie.
+
+> ⚠️ Wartość `canRestore` powyżej (zawsze `true`) podlega **OPEN DECISION D-1**
+> (`master-tdd-plan.md` Dodatek F). Jeśli Daniel potwierdzi anti-hostage — ten kod
+> jest poprawny i `master-tdd-plan.md` §5.3 wymaga aktualizacji. Jeśli nie —
+> `canRestore` musi zależeć od stanu. Do tego czasu: **nie implementować**.
 
 ## 3. Proration — edge cases (uzupełnienie)
 
