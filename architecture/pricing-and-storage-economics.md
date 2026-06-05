@@ -180,6 +180,15 @@ Zapis ścieżki myślowej z sesji (żeby nie przepadła i żeby nie wracać do �
 CYKLICZNA i proporcjonalna do ZAJĘTEJ (fizycznej) PRZESTRZENI.** Reszta to wariacje
 na temat progów i overage.
 
+> **AKTUALIZACJA 2026-06-05 (rozjazd z tym Dodatkiem):** wiersze „Hetzner Storage Box"
+> i „Migracja na inny tani backend" były tu oznaczone jako *pivot / FROZEN / poza
+> zakresem*. **To założenie zostało świadomie reotwarte** — po realnej pracy z OVH
+> Cloud Archive (Swift) backend jest reewaluowany z powodów **operacyjnych i zaufania**
+> (a nie cenowych). Aktualny kierunek: **[`storage-backend-decision.md`](storage-backend-decision.md)**
+> (rekomendacja: odejść od Cloud Archive na rzecz prostego S3/plikowego backendu + 3-2-1).
+> Opcja A (cena od fizycznych bajtów) pozostaje słuszna **niezależnie od dostawcy** —
+> zmienia się tylko stawka kosztu/TB do podstawienia.
+
 ---
 
 ## Dodatek B — co zasila testy płatności (constraint dla Devina)
