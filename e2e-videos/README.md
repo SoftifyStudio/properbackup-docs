@@ -50,6 +50,29 @@ Test code: [`properbackup-web/tests/e2e/recovery-e2e.spec.js`](https://github.co
 - **Test 7:** Backend now blocks Account B via card fingerprint validation in PostgreSQL + `abuse_blocked` flag in `activateSubscription` transaction
 - **Test 10:** Backend sets `past_due` status + 7-day grace period instead of immediate lockout. Frontend shows yellow warning banner.
 
+## Videos (2026-05-31 — money module hardening)
+
+Directory: `2026-05-31/`
+
+**41/41 PASSED** (12.7 min, 1 worker, zero retries). Full payment module hardening.
+
+20 .webm recordings from browser-based tests (API-only tests have no video):
+
+| Group | Tests | Coverage |
+|-------|-------|----------|
+| A (9) | M-DECLINE-01..09 | Card declines: generic, insufficient_funds, lost, stolen, expired, CVC, processing_error, charge-fail, Radar |
+| B (2) | M-3DS-01..02 | 3D Secure: auth success/fail |
+| C (5) | M-SUB-01..06 | Subscription lifecycle: abandoned, double-sub, cancel, reactivate, past_due |
+| F (2) | M-ABUSE-01,05 | Trial abuse: card fingerprint, expired trial retry |
+
+API-only tests (no video): WEBHOOK-03/04, IDEMP-02/03, ABUSE-03, AUTHZ-01..06, INPUT-01..05, VAT-01..03, RESIL-02/05, EDGE-01..04
+
+### Bugs found and fixed (2 × A-type):
+1. `StripeHandler.kt` — invalid `plan` → 503 NPE. Fixed: `plan in listOf("monthly", "annual")` guard → 400.
+2. `AuthHandler.kt` — email >64 chars / invalid format / SQL injection → 500. Fixed: regex + length validation → 400.
+
+Test code: [`properbackup-web/tests/e2e/edge-money-e2e.spec.js`](https://github.com/SoftifyStudio/properbackup-web/tree/main/tests/e2e/edge-money-e2e.spec.js)
+
 ## Jak odpalić testy
 
 ```bash
