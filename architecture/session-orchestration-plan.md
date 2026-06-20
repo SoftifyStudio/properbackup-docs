@@ -360,37 +360,59 @@ properbackup-buffer/
 
 ---
 
-## 5. Model cenowy (CZEKA NA DECYZJE DANIELA)
+## 5. Model cenowy — ZATWIERDZONY (2026-06-20, decyzja Daniela)
 
 ### Fakty (OVH Cloud Archive, netto)
 - Storage: 0,0000132 PLN/GiB/godz = **9,64 PLN/TiB/mc netto** = **11,86 PLN/TiB/mc brutto**
 - Zapis (ingress): **0,04 PLN/GiB netto** = **0,049 PLN/GiB brutto**
 - Egress (restore): **DARMOWY**
+- **Kompresja**: GZIPOutputStream PRZED szyfrowaniem = ~40% oszczednosci na storage
 
-### Kalkulacja marzy
+### Cennik (FINAL)
 
-| Uzycie klienta | Koszt storage brutto/mc | Koszt storage brutto/rok | Wymagana cena roczna (koszt + 300 zl marzy) |
-|---|---|---|---|
-| 200 GB | 2,37 zl | 28 zl | 328 zl |
-| 500 GB | 5,93 zl | 71 zl | 371 zl |
-| 1 TB | 12,14 zl | 146 zl | 446 zl |
-| 2 TB | 24,28 zl | 291 zl | 591 zl |
+Unlimited devices w kazdym tierze. Quota = start quota, rosnie +150 GB/mc, max 2 TB.
+Quota liczona na **fizycznych bajtach po kompresji** (co faktycznie siedzi na OVH).
 
-Plus jednorazowy koszt zapisu: ~50 zl brutto / TB wgrane.
+| Tier | Start quota | Cena mc | Cena rok (~25% rabat) | Zysk worst case 1mc + 90dni ret. |
+|---|---|---|---|---|
+| **S** | 150 GB | **29 zl/mc** | **259 zl/rok** | +21 zl ✅ |
+| **M** | 300 GB | **39 zl/mc** | **349 zl/rok** | +23 zl ✅ |
+| **L** | 500 GB | **59 zl/mc** | **529 zl/rok** | +33 zl ✅ |
+| **XL** | 1 TB | **89 zl/mc** | **790 zl/rok** | +31 zl ✅ |
 
-### Model (propozycja — do zatwierdzenia)
-- Jeden plan, unlimited devices
-- Quota: fizyczne bajty z historia (Opcja A z `pricing-and-storage-economics.md`)
-- Miesiecznie: ograniczona quota (progresywna — rosnie z czasem)
-- Rocznie: pelne 2 TB od razu
-- Web UI: wyrazne info ile miejsca dostepne, ostrzezenie przed wyczerpaniem
-- Ceny: **CZEKA NA DECYZJE DANIELA** (propozycja: 39 zl/mc lub 390 zl/rok)
+### Zasady
+
+- **Retencja po rezygnacji:** 90 dni. Dane dostepne do restore (canRestore=true), backup zatrzymany (canUpload=false). Po 90 dniach: email ostrzegawczy 7 dni przed → fizyczne usuniecie z OVH
+- **Zacheta do rocznego:** nie rabat cenowy, ale roczny = pelna start quota od razu (bez progresywnego wzrostu? — do decyzji)
+- **Downgrade:** jezeli current usage > nowa quota → backup zatrzymany (canUpload=false). Dane przechowywane. Klient musi wyczyscic albo wrocic na wyzszy tier
+- **Unlimited devices:** quota WSPOLNA dla wszystkich urzadzen. Web UI jasno komunikuje: "Wiecej urzadzen = szybsze zuzycie limitu"
+- **Kompresja:** GZIPOutputStream przed AES-256-GCM. Klient "widzi" wiecej miejsca niz fizycznie zajmuje (bonus)
 
 ### Ograniczenia architektoniczne
 - Dedup (DifferentialScanner, 4MB chunki) jest KRYTYCZNY dla oplacalnosci
 - HR-1 (immutability) = fizyczne bajty TYLKO rosna
-- StorageQuotaGuard liczy fizyczne bajty → blokuje upload gdy limit osiagniety
+- StorageQuotaGuard liczy fizyczne bajty po kompresji → blokuje upload gdy limit osiagniety
 - Usuniete pliki przechowywane z flaga `DELETED` (nie fizycznie kasowane)
+
+### Web UI — plan display
+- Selektor tierow: S / M / L / XL z cenami
+- Toggle: Miesiecznie / Rocznie (z wyrazna oszczednoscia)
+- Progress bar: "Wykorzystano X GB / Y GB" (fizyczne po kompresji)
+- Kolory: zielony < 70%, zolty 70-90%, czerwony > 90%
+- Ostrzezenie: "Backup zatrzyma sie za ~X dni" (szacowanie na podstawie tempa zuzycia)
+
+---
+
+## 5b. Przyszle features — P2 (PO obecnych sesjach)
+
+### Mapa swiata MC z chunk-level restore (P2)
+- Interaktywna mapa regionow/chunkow w web panelu
+- Parser Anvil (.mca) po stronie buffera — wyciaganie konkretnych chunkow z backup
+- Drill-down: region → chunk → diff blokow miedzy snapshotami
+- Timeline slider na mapie — stan swiata w dowolnym momencie
+- Restore per-chunk: zaznacz chunki na mapie → cofnij
+- **KIEDY:** po implementacji agenta MC (properbackup-mc). Na razie file-level restore (sesja RECOVERY)
+- Wymaga: parser NBT (biblioteka Querz/NBT, MIT), chunk extraction z .mca, React canvas/SVG grid
 
 ---
 

@@ -150,18 +150,23 @@ nie najtańszy GB.
 4. **Unlimited devices** jako USP (urządzenia nic nie kosztują — kosztują dane).
 5. **Time-travel / pełna historia** jako sztandarowy wyróżnik premium.
 
-> ### ⚠️ KOREKTA (2026-06-20, decyzja Daniela) — JEDEN PLAN, unlimited devices, 2 TB
+> ### ⚠️ KOREKTA (2026-06-20, decyzja Daniela) — TIERY S/M/L/XL, unlimited devices, max 2 TB
 >
-> Rezygnujemy z tierow cenowych (Starter/Personal/Pro/Power). Jeden plan:
-> - **Unlimited devices** — jasna komunikacja: wiecej urzadzen = szybsze zuzycie limitu
-> - **2 TB fizycznej przestrzeni** (z historia, Opcja A) — twardy cap
-> - Quota liczona od fizycznych bajtow (immutable HR-1: usuniete pliki = flaga, nie kasowanie)
-> - **Plan miesiczny:** ograniczona quota (progresywna, rosnie z czasem subskrypcji)
-> - **Plan roczny:** pelne 2 TB od razu
-> - Web UI: jasny licznik "X GB / 2 TB", ostrzezenie przed wyczerpaniem,
->   sugestia przejscia na roczny lub informacja ze backup sie zatrzyma
-> - **Target marzy: ~300 zl brutto/rok (~25 zl/mc) per klient**
-> - **Ceny: CZEKA NA DECYZJE DANIELA** (patrz kalkulacja w `session-orchestration-plan.md` §5)
+> Rezygnujemy z tierow Starter/Personal/Pro/Power. Nowe tiery:
+>
+> | Tier | Start quota | Cena mc | Cena rok (~25% rabat) |
+> |---|---|---|---|
+> | **S** | 150 GB | **29 zl/mc** | **259 zl/rok** |
+> | **M** | 300 GB | **39 zl/mc** | **349 zl/rok** |
+> | **L** | 500 GB | **59 zl/mc** | **529 zl/rok** |
+> | **XL** | 1 TB | **89 zl/mc** | **790 zl/rok** |
+>
+> - **Unlimited devices** w kazdym tierze — quota WSPOLNA
+> - Quota rosnie +150 GB/mc, max **2 TB** (Opcja A: fizyczne bajty po kompresji)
+> - **Kompresja:** GZIPOutputStream PRZED szyfrowaniem (~40% oszczednosci)
+> - **Retencja po rezygnacji:** 90 dni (canRestore=true, canUpload=false)
+> - **Downgrade:** current usage > nowa quota → backup zatrzymany
+> - Pelna analiza: `session-orchestration-plan.md` §5
 >
 > Poprzednia tabela tierow ponizej jest **SUPERSEDED** — zostaje jako kontekst.
 
