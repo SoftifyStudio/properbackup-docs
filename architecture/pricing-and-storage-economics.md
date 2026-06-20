@@ -149,16 +149,30 @@ nie najtańszy GB.
 3. **Przejrzysty licznik „bieżące vs historia"** w panelu — żeby klient rozumiał, za co płaci.
 4. **Unlimited devices** jako USP (urządzenia nic nie kosztują — kosztują dane).
 5. **Time-travel / pełna historia** jako sztandarowy wyróżnik premium.
-6. Cennik per-pojemność (DRAFT, do dostrojenia po pomiarze dedup):
+
+> ### ⚠️ KOREKTA (2026-06-20, decyzja Daniela) — JEDEN PLAN, unlimited devices, 2 TB
+>
+> Rezygnujemy z tierow cenowych (Starter/Personal/Pro/Power). Jeden plan:
+> - **Unlimited devices** — jasna komunikacja: wiecej urzadzen = szybsze zuzycie limitu
+> - **2 TB fizycznej przestrzeni** (z historia, Opcja A) — twardy cap
+> - Quota liczona od fizycznych bajtow (immutable HR-1: usuniete pliki = flaga, nie kasowanie)
+> - **Plan miesiczny:** ograniczona quota (progresywna, rosnie z czasem subskrypcji)
+> - **Plan roczny:** pelne 2 TB od razu
+> - Web UI: jasny licznik "X GB / 2 TB", ostrzezenie przed wyczerpaniem,
+>   sugestia przejscia na roczny lub informacja ze backup sie zatrzyma
+> - **Target marzy: ~300 zl brutto/rok (~25 zl/mc) per klient**
+> - **Ceny: CZEKA NA DECYZJE DANIELA** (patrz kalkulacja w `session-orchestration-plan.md` §5)
+>
+> Poprzednia tabela tierow ponizej jest **SUPERSEDED** — zostaje jako kontekst.
 
 | Plan (unlimited devices) | Fizyczna przestrzeń | Cena (DRAFT) | Uwaga |
 |---|---|---|---|
-| Starter | 250 GB | ~14 zł/mc | lekkie configy, małe serwery |
-| Personal | 500 GB | ~24 zł/mc | multi-device (PC+telefon+rodzina) |
-| Pro | 1 TB | ~39 zł/mc | duże mapy MC, ciężkie VPS |
-| Power | 2 TB | ~69 zł/mc | bardzo duże / metered overage |
+| ~~Starter~~ | ~~250 GB~~ | ~~\~14 zł/mc~~ | ~~SUPERSEDED~~ |
+| ~~Personal~~ | ~~500 GB~~ | ~~\~24 zł/mc~~ | ~~SUPERSEDED~~ |
+| ~~Pro~~ | ~~1 TB~~ | ~~\~39 zł/mc~~ | ~~SUPERSEDED~~ |
+| ~~Power~~ | ~~2 TB~~ | ~~\~69 zł/mc~~ | ~~SUPERSEDED~~ |
 
-> Liczby cenowe **DRAFT** — zależą od zmierzonego dedup i decyzji A/B/C (Dodatek F: D-5).
+> Liczby cenowe **SUPERSEDED** — patrz korekta powyzej.
 
 ---
 
