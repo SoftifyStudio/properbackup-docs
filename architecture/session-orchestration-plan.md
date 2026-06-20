@@ -40,11 +40,15 @@ Dane klientow przechowujemy **WYLACZNIE na dedykowanym serwerze OVH**
    lokalnym dysku.
 
 ### Deploy / test
-- **Per-modul testy live:** dotychczasowy test server
-  `properbackup-test-server.softify.com.pl` (secret `TEST_SERVER_SECRET_KEY`) —
-  OK do testow jednostkowych/integracyjnych modulu.
-- **Pelny zintegrowany E2E:** na NOWYM dedyku (Proxmox LXC) — koordynuje manager
-  po dostarczeniu PRow przez sesje.
+- **KANONICZNY cel deploy + storage = dedykowany serwer OVH** (51.255.93.127).
+  Pelny opis i stan: **`deployment-dedicated-server.md`** (NAJWAZNIEJSZY dok.
+  infrastruktury). Dostep: secret `OVH_DEDICATED_SERVER_PROXMOX_ROOT_PASSWORD`,
+  `ssh root@51.255.93.127` → `pct exec 100`. Na dedyku juz dziala stack
+  (buffer :8080, postgres, web :80) — ale ze STAREGO kodu.
+- **Pelny zintegrowany E2E** (agent→buffer→pack→/mnt/storage→restore→sha256):
+  na tym dedyku — koordynuje manager po dostarczeniu PR-ow przez sesje.
+- Stary `properbackup-test-server.softify.com.pl` (home.pl) — tymczasowy,
+  pomocniczy do per-modul testow jesli potrzeba.
 
 ---
 
