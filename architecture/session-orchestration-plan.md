@@ -1,8 +1,50 @@
 # ProperBackup — Session Orchestration Plan (4 rownolegle sesje)
 
-Wersja: 1.0 (2026-06-20)
+Wersja: 1.1 (2026-06-20)
 Status: **AKTYWNY** — instrukcje dla 4 rownolegych sesji Devin
 Autor: Manager session (koordynacja)
+
+---
+
+## 0a. AKTUALIZACJA ARCHITEKTURY STORAGE — 2026-06-20 (NADRZEDNA)
+
+> Status: **ZATWIERDZONE przez Daniela.** Ta sekcja ma **PIERWSZENSTWO** nad
+> wszystkimi wzmiankami o "OVH Cloud Archive" / "Swift" / "unsealing" /
+> "segmentacja DLO/SLO" w dalszej czesci tego dokumentu oraz w
+> `ovh-cloud-archive-migration-spec.md`. Gdy cokolwiek ponizej jest sprzeczne z
+> ta sekcja — obowiazuje ta sekcja.
+
+### Decyzja
+Dane klientow przechowujemy **WYLACZNIE na dedykowanym serwerze OVH**
+(Kimsufi KS-STOR, 4x4 TB HDD RAID5 = ~11 TB na `/mnt/storage`).
+**NIE replikujemy aplikacyjnie do Cloud Archive ani innej chmury.**
+
+- **Durability / offsite / DR:** realizowane na poziomie infrastruktury przez
+  **wlasny backup calego serwera OVH** (OVH server backup), NIE w kodzie aplikacji.
+- **Restore jest INSTANT** — brak unsealing/thawing. Pliki czytane bezposrednio
+  z lokalnego dysku.
+
+### Konsekwencje dla kodu
+1. **Storage backend** = interfejs `StorageClient` + `LocalFsStorageClient`
+   (zapis paczek 900-950 MB do `/mnt/storage`). Zachowaj interfejs (pluggable na
+   przyszlosc), ale **PRIMARY = local FS**.
+2. **USUN z critical path:** unseal request/polling, segmentacja DLO/SLO,
+   opoznienia `MockSwiftClient`. `OvhSwiftClient` moze zostac w repo za
+   interfejsem, ale **NIE jest uzywany w pipeline**.
+3. **RECOVERY:** stan `THAWING` staje sie pass-through (no-op) → od razu `READY`.
+   Zero zaleznosci od unseal. Brak punktu styku "OVH unseal" miedzy sesjami.
+4. **Integrity:** sha256 po zapisie na lokalnym dysku (HEAD/ETag z Swift nieaktualne).
+5. **Cennik (sekcja 5):** ceny KLIENTA bez zmian (S/M/L/XL zatwierdzone). Zmienia
+   sie tylko NASZA struktura kosztow (flat ~109 zl/mc za serwer zamiast per-GB)
+   → marza lepsza. Quota nadal liczona na **fizycznych bajtach po kompresji** na
+   lokalnym dysku.
+
+### Deploy / test
+- **Per-modul testy live:** dotychczasowy test server
+  `properbackup-test-server.softify.com.pl` (secret `TEST_SERVER_SECRET_KEY`) —
+  OK do testow jednostkowych/integracyjnych modulu.
+- **Pelny zintegrowany E2E:** na NOWYM dedyku (Proxmox LXC) — koordynuje manager
+  po dostarczeniu PRow przez sesje.
 
 ---
 
