@@ -231,6 +231,13 @@ Małe tiery (S/M) monetyzują stały box **najlepiej** (najwyższa cena za GB), 
 
 Reguła: quota startowa rośnie **+10% startu/mc**, aż do **2× startu** (twardy sufit per tier). Cena stała. Quota liczona na fizycznych bajtach po kompresji.
 
+> **Annual = pełny sufit od razu (decyzja 2026-06-21).** Klient płacący **rocznie**
+> dostaje od ręki **pełny sufit tieru (2× start)** — perk za płatność z góry
+> (np. XL annual = **2 TB od razu**). **Monthly** = start quota + progresywny wzrost.
+> **Uwaga pojemnościowa:** XL annual z 2 TB upfront = **tylko ~5 klientów / box
+> (10 TB)** → zysk/box ~194 zł/mc przy 790 zł/rok (~59% marży). Świadomy trade-off:
+> mocniejszy argument sprzedażowy vs szybsze zapełnianie serwera.
+
 | Tier | Start | Wzrost/mc | Sufit (2× start) | Cena mc | Cena/TB przy suficie | Narzut nad koszt |
 |---|---|---|---|---|---|---|
 | S | 150 GB | +15 GB | 300 GB | 29 zł | 97 zł | ×7,2 |

@@ -440,7 +440,7 @@ kompresji** (co faktycznie siedzi na dysku).
 ### Zasady
 
 - **Retencja po rezygnacji:** 90 dni. Dane dostepne do restore (canRestore=true), backup zatrzymany (canUpload=false). Po 90 dniach: email ostrzegawczy 7 dni przed → fizyczne usuniecie z OVH
-- **Zacheta do rocznego:** nie rabat cenowy, ale roczny = pelna start quota od razu (bez progresywnego wzrostu? — do decyzji)
+- **Zacheta do rocznego (DECYZJA 2026-06-21):** roczny = **pelny sufit tieru (2× start) od razu** (np. XL annual = 2 TB od razu), bez progresywnego wzrostu. Monthly = start + wzrost. Pojemnosc/marza: `pricing-and-storage-economics.md` §9.4. Ceny: S 259, M 349, L 529, XL **790** zl/rok.
 - **Downgrade:** jezeli current usage > nowa quota → backup zatrzymany (canUpload=false). Dane przechowywane. Klient musi wyczyscic albo wrocic na wyzszy tier
 - **Unlimited devices:** quota WSPOLNA dla wszystkich urzadzen. Web UI jasno komunikuje: "Wiecej urzadzen = szybsze zuzycie limitu"
 - **Kompresja:** GZIPOutputStream przed AES-256-GCM. Klient "widzi" wiecej miejsca niz fizycznie zajmuje (bonus)
