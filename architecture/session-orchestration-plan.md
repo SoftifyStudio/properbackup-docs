@@ -416,8 +416,14 @@ properbackup-buffer/
 
 ### Cennik (FINAL)
 
-Unlimited devices w kazdym tierze. Quota = start quota, rosnie +150 GB/mc, max 2 TB.
-Quota liczona na **fizycznych bajtach po kompresji** (co faktycznie siedzi na OVH).
+Unlimited devices w kazdym tierze. Quota liczona na **fizycznych bajtach po
+kompresji** (co faktycznie siedzi na dysku).
+
+> ⚠ **KOREKTA 2026-06-21:** reguła „rosnie +150 GB/mc, max 2 TB **dla kazdego
+> tieru**" jest **WYCOFANA** — pozwalala tani tier (S, 29 zl) zajac z czasem 2 TB
+> = 1/5 serwera (tylko 5 takich klientow / box → zysk ~10 zl/mc). Obowiazuje
+> **Opcja 2: wzrost +10% startu/mc, twardy sufit 2× startu per tier**. Pelne
+> liczby i ekonomia stalego serwera: `pricing-and-storage-economics.md` §9.4.
 
 | Tier | Start quota | Cena mc | Cena rok (~25% rabat) | Zysk worst case 1mc + 90dni ret. |
 |---|---|---|---|---|
@@ -425,6 +431,11 @@ Quota liczona na **fizycznych bajtach po kompresji** (co faktycznie siedzi na OV
 | **M** | 300 GB | **39 zl/mc** | **349 zl/rok** | +23 zl ✅ |
 | **L** | 500 GB | **59 zl/mc** | **529 zl/rok** | +33 zl ✅ |
 | **XL** | 1 TB | **89 zl/mc** | **790 zl/rok** | +31 zl ✅ |
+
+> Kolumna „Zysk worst case" liczona byla wzgledem **OVH Cloud Archive (per-GB)** —
+> juz nieaktualna jako NASZ koszt. Realna marza w modelu **stalego serwera**
+> (135 zl brutto/mc = ~10 TB): **70–93%** zaleznie od zapelnienia — patrz
+> `pricing-and-storage-economics.md` §9.
 
 ### Zasady
 

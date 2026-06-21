@@ -1,7 +1,7 @@
 # Pricing & Storage Economics — analiza opłacalności (robocza)
 
-Wersja: 0.1 (robocza) — **2026-06-05: utworzono na podstawie sesji z Danielem (eksploracja modelu cenowego).**
-Status: **EKSPLORACJA / DECYZJE OTWARTE** — to NIE jest zatwierdzony cennik. To zapis analizy + rekomendacja, na podstawie której Daniel podejmuje decyzję.
+Wersja: 0.2 — **2026-06-05: utworzono (eksploracja).** **2026-06-21: dopisano §9 — model kosztu STAŁY SERWER (dedyk), NADRZĘDNY dla kosztu/marży.**
+Status: **§9 ZATWIERDZONA (Daniel, 2026-06-21)** dla struktury kosztów i quoty. Sekcje 1–8 to wcześniejsza eksploracja pod cold storage — stawki OVH Cloud Archive zostają **już tylko jako benchmark/historia**, NIE są naszym kosztem. **Aktualny model kosztu = §9.**
 Powiązane: `ovh-cloud-archive-migration-spec.md` (HR-1 immutability, koszty per GB), `master-tdd-plan.md` (Dodatek F — D-5/D-6), `buffer-core-master-spec.md` (dedup/ChunkSealer/DifferentialScanner), `minecraft-plugin-master-spec.md` (profil ciężkiego klienta MC).
 
 > **Po co ten dokument:** w trakcie hardeningu płatności wyszło, że model cenowy
@@ -23,6 +23,11 @@ Powiązane: `ovh-cloud-archive-migration-spec.md` (HR-1 immutability, koszty per
 ---
 
 ## 1. Koszt jednostkowy (stawki OVH)
+
+> ⚠ **SUPERSEDED jako NASZ koszt (2026-06-21).** Poniższe stawki per-GB dotyczą
+> OVH Cloud Archive (cold storage), z którego **zrezygnowaliśmy** na rzecz
+> dedykowanego serwera (koszt **stały**, nie per-GB). Te liczby zostają **tylko
+> jako benchmark rynkowy**. Nasza realna struktura kosztu i marży = **§9**.
 
 > **DECYZJA Daniela (2026-06-05):** liczymy **jedną płaską stawkę** storage.
 > OVH typowo ma jedną cenę; tańszy „cold" (~20% taniej) **nie jest wart** dodatkowej
@@ -162,7 +167,7 @@ nie najtańszy GB.
 > | **XL** | 1 TB | **89 zl/mc** | **790 zl/rok** |
 >
 > - **Unlimited devices** w kazdym tierze — quota WSPOLNA
-> - Quota rosnie +150 GB/mc, max **2 TB** (Opcja A: fizyczne bajty po kompresji)
+> - Quota rośnie **per tier z sufitem 2× startu** (wzrost lojalnościowy, Opcja 2) — **nie** wspólne 2 TB dla każdego (to była pułapka). Pełne liczby: **§9.4**
 > - **Kompresja:** GZIPOutputStream PRZED szyfrowaniem (~40% oszczednosci)
 > - **Retencja po rezygnacji:** 90 dni (canRestore=true, canUpload=false)
 > - **Downgrade:** current usage > nowa quota → backup zatrzymany
@@ -178,6 +183,86 @@ nie najtańszy GB.
 | ~~Power~~ | ~~2 TB~~ | ~~\~69 zł/mc~~ | ~~SUPERSEDED~~ |
 
 > Liczby cenowe **SUPERSEDED** — patrz korekta powyzej.
+
+---
+
+## 9. MODEL KOSZTU: STAŁY SERWER (DEDYK OVH) — 2026-06-21 (NADRZĘDNY dla kosztu/marży)
+
+> Status: **ZATWIERDZONE (Daniel, 2026-06-21).** Ta sekcja ma **PIERWSZEŃSTWO** nad
+> §1 i §4–§8 w zakresie **NASZEJ struktury kosztu i marży**. Ceny KLIENTA
+> (S/M/L/XL) bez zmian. Storage = **wyłącznie dedyk OVH** (patrz
+> `deployment-dedicated-server.md` i `session-orchestration-plan.md` §0a).
+
+### 9.1 Zmiana modelu: koszt ZMIENNY → STAŁY
+- **Stary model (cold storage):** płaciliśmy OVH per-GB (~11,86 zł brutto/TiB/mc + ingest). Koszt **rósł razem z danymi** (zmienny) — był dodatni od pierwszego klienta.
+- **Nowy model (dedyk):** **stały ~109 zł netto/mc ≈ 135 zł brutto/mc** za cały serwer, na którym mamy **realnie ~10 TB** na dane klientów (RAID5 4×4 TB → ~11 TB minus narzut/headroom).
+- **Koszt all-in: ~13,5 zł brutto/TB/mc** — ale **tylko przy pełnym boxie**. Płacisz 135 zł niezależnie od tego, czy masz 1 czy 60 klientów.
+- **Offsite/DR:** backup całego serwera na **dysk domowy (łącze 800/100 Mbps) ≈ 0 zł** — patrz §9.5.
+- **Wniosek:** marża jest świetna, ale **trzeba box zapełnić**, a przychód per box ma **twardy sufit** (skalowanie = dokładanie serwerów).
+
+### 9.2 Próg rentowności (pokrycie 135 zł/mc)
+
+| Tier | Cena mc | Klientów na pokrycie serwera | (rocznie, na mc) |
+|---|---|---|---|
+| S | 29 zł | **5** | 7 |
+| M | 39 zł | 4 | 5 |
+| L | 59 zł | 3 | 4 |
+| XL | 89 zł | **2** | 3 |
+
+→ Już **~5 klientów S (albo 2 XL)** = serwer na zero. Powyżej to niemal czysty zysk (koszt stały).
+
+### 9.3 Sufit pojemności i przychodu per serwer (klienci na quocie STARTOWEJ)
+
+10 TB = 10 240 GB. Jeśli każdy klient siedzi na quocie startowej swojego tieru:
+
+| Tier | Quota | Max klientów / 10 TB | Przychód mc | Zysk mc (−135 zł) | Marża |
+|---|---|---|---|---|---|
+| same S | 150 GB | 68 | 1 972 zł | **1 837 zł** | 93% |
+| same M | 300 GB | 34 | 1 326 zł | 1 191 zł | 90% |
+| same L | 500 GB | 20 | 1 180 zł | 1 045 zł | 89% |
+| same XL | 1 TB | 10 | 890 zł | 755 zł | 85% |
+
+Małe tiery (S/M) monetyzują stały box **najlepiej** (najwyższa cena za GB), kosztem większego wolumenu supportu/churnu.
+
+### 9.4 Quota: Opcja 2 — wzrost lojalnościowy z SUFITEM PER TIER (ZATWIERDZONE)
+
+> **Zastępuje** regułę „+150 GB/mc → wspólne 2 TB dla każdego" — była pułapką:
+> tani tier (29 zł) mógł z czasem zająć 2 TB = 1/5 całego serwera.
+
+Reguła: quota startowa rośnie **+10% startu/mc**, aż do **2× startu** (twardy sufit per tier). Cena stała. Quota liczona na fizycznych bajtach po kompresji.
+
+| Tier | Start | Wzrost/mc | Sufit (2× start) | Cena mc | Cena/TB przy suficie | Narzut nad koszt |
+|---|---|---|---|---|---|---|
+| S | 150 GB | +15 GB | 300 GB | 29 zł | 97 zł | ×7,2 |
+| M | 300 GB | +30 GB | 600 GB | 39 zł | 65 zł | ×4,8 |
+| L | 500 GB | +50 GB | 1 TB | 59 zł | 59 zł | ×4,4 |
+| XL | 1 TB | +100 GB | 2 TB | 89 zł | 44 zł | ×3,3 |
+
+**Bezpieczeństwo marży — worst case (WSZYSCY dorośli do sufitu):**
+
+| Tier | Sufit | Max klientów / 10 TB | Przychód mc | Zysk mc | Marża |
+|---|---|---|---|---|---|
+| same S | 300 GB | 34 | 986 zł | 851 zł | 86% |
+| same M | 600 GB | 17 | 663 zł | 528 zł | 80% |
+| same L | 1 TB | 10 | 590 zł | 455 zł | 77% |
+| same XL | 2 TB | 5 | 445 zł | 310 zł | 70% |
+
+→ Nawet w najgorszym przypadku **marża 70–86%**. Świeży klient (start quota) = 85–93%. Realnie operacyjnie **~75–90%**. „Darmowy" wzrost świadomie zjada część marży — to **koszt retencji**, ograniczony sufitem 2×.
+
+> **Dwa pokrętła** (do dostrojenia): tempo wzrostu (domyślnie +10%/mc) i mnożnik sufitu (domyślnie 2×).
+
+### 9.5 DR / offsite: dysk domowy jako kopia v1
+
+- **3-2-1 startowo:** kopia #1 = dedyk OVH, kopia #2 = dysk domowy (inna lokalizacja).
+- **Tworzenie kopii (OVH → dom):** szybkie — limit = download domu **800 Mbps ≈ 100 MB/s ≈ ~300+ GB/h**. Codzienny inkrement i pierwszy duży zrzut OK.
+- **Restore po awarii (dom → OVH):** wolniejszy kierunek — limit = upload domu **100 Mbps ≈ ~40 GB/h realnie**: 500 GB ≈ ~13 h, 1 TB ≈ ~1 dzień, pełne 10 TB ≈ ~10 dni.
+- **Wymóg:** inkrementalnie (`restic`/`borg`/`rsync` na `/mnt/storage`), automatycznie, + **okresowy testowy restore** (backup nieprzetestowany = brak backupu).
+- **RPO vs RTO:** dysk domowy chroni przed **utratą danych** (RPO dobre); **tempo odtworzenia** (RTO) ogranicza 100 Mbps up — komunikować klientowi uczciwie.
+- **Trigger graduacji** do twardszego offsite (drugi serwer / object storage offsite): gdy płacących obcych > próg LUB zapełnienie boxa > ~50%.
+
+### 9.6 Skalowanie i RODO
+- **Sufit przychodu per box** (§9.3/§9.4). Skalowanie = **dokładanie serwerów** — każdy kolejny to +135 zł/mc i +~10 TB (kolejny stały skok), nie nieskończony wzrost na jednym.
+- **RODO:** faza bootstrap / własni klienci na dysku domowym jako offsite = OK. Przed szerszą sprzedażą obcym (pozycjonowanie „EU/RODO") offsite przenieść na rozwiązanie z umową powierzenia (drugi serwer w DC / object storage EU).
 
 ---
 
@@ -198,6 +283,14 @@ Zapis ścieżki myślowej z sesji (żeby nie przepadła i żeby nie wracać do �
 **Wniosek z całej rundy:** każda droga zbiega się do tego samego — **cena musi być
 CYKLICZNA i proporcjonalna do ZAJĘTEJ (fizycznej) PRZESTRZENI.** Reszta to wariacje
 na temat progów i overage.
+
+> **AKTUALIZACJA 2026-06-21 — świadomy pivot.** Powyżej odrzucono „self-host na
+> RAID" i „dyski w domu" jako **primary** storage (jedna lokalizacja = utrata
+> wszystkiego, RODO, zostajesz operatorem storage). Decyzja z 2026-06-21
+> **świadomie przyjmuje dedyk OVH jako primary**, a obiekcję „jedna lokalizacja"
+> rozwiązuje **offsite na dysk domowy (§9.5) + plan graduacji**. To nie unieważnia
+> ostrzeżeń z tej tabeli — to ich **kontrolowane przyjęcie na fazę bootstrap**.
+> Pełna ekonomia tej decyzji: **§9**.
 
 ---
 
