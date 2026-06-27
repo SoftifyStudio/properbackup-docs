@@ -149,16 +149,35 @@ nie najtańszy GB.
 3. **Przejrzysty licznik „bieżące vs historia"** w panelu — żeby klient rozumiał, za co płaci.
 4. **Unlimited devices** jako USP (urządzenia nic nie kosztują — kosztują dane).
 5. **Time-travel / pełna historia** jako sztandarowy wyróżnik premium.
-6. Cennik per-pojemność (DRAFT, do dostrojenia po pomiarze dedup):
+
+> ### ⚠️ KOREKTA (2026-06-20, decyzja Daniela) — TIERY S/M/L/XL, unlimited devices, max 2 TB
+>
+> Rezygnujemy z tierow Starter/Personal/Pro/Power. Nowe tiery:
+>
+> | Tier | Start quota | Cena mc | Cena rok (~25% rabat) |
+> |---|---|---|---|
+> | **S** | 150 GB | **29 zl/mc** | **259 zl/rok** |
+> | **M** | 300 GB | **39 zl/mc** | **349 zl/rok** |
+> | **L** | 500 GB | **59 zl/mc** | **529 zl/rok** |
+> | **XL** | 1 TB | **89 zl/mc** | **790 zl/rok** |
+>
+> - **Unlimited devices** w kazdym tierze — quota WSPOLNA
+> - Quota rosnie +150 GB/mc, max **2 TB** (Opcja A: fizyczne bajty po kompresji)
+> - **Kompresja:** GZIPOutputStream PRZED szyfrowaniem (~40% oszczednosci)
+> - **Retencja po rezygnacji:** 90 dni (canRestore=true, canUpload=false)
+> - **Downgrade:** current usage > nowa quota → backup zatrzymany
+> - Pelna analiza: `session-orchestration-plan.md` §5
+>
+> Poprzednia tabela tierow ponizej jest **SUPERSEDED** — zostaje jako kontekst.
 
 | Plan (unlimited devices) | Fizyczna przestrzeń | Cena (DRAFT) | Uwaga |
 |---|---|---|---|
-| Starter | 250 GB | ~14 zł/mc | lekkie configy, małe serwery |
-| Personal | 500 GB | ~24 zł/mc | multi-device (PC+telefon+rodzina) |
-| Pro | 1 TB | ~39 zł/mc | duże mapy MC, ciężkie VPS |
-| Power | 2 TB | ~69 zł/mc | bardzo duże / metered overage |
+| ~~Starter~~ | ~~250 GB~~ | ~~\~14 zł/mc~~ | ~~SUPERSEDED~~ |
+| ~~Personal~~ | ~~500 GB~~ | ~~\~24 zł/mc~~ | ~~SUPERSEDED~~ |
+| ~~Pro~~ | ~~1 TB~~ | ~~\~39 zł/mc~~ | ~~SUPERSEDED~~ |
+| ~~Power~~ | ~~2 TB~~ | ~~\~69 zł/mc~~ | ~~SUPERSEDED~~ |
 
-> Liczby cenowe **DRAFT** — zależą od zmierzonego dedup i decyzji A/B/C (Dodatek F: D-5).
+> Liczby cenowe **SUPERSEDED** — patrz korekta powyzej.
 
 ---
 

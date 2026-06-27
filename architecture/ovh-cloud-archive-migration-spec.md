@@ -232,6 +232,31 @@ Dlaczego:
 > kontekst, ale model kosztowy i `OvhCostFetcher` liczą płaską stawkę.
 > Pełna analiza: `pricing-and-storage-economics.md`.
 
+> ### ⚠️ KOREKTA 2 (2026-06-20, decyzja Daniela) — jednak OVH CLOUD ARCHIVE (cold)
+>
+> Wracamy do **OVH Cloud Archive** (cold storage) zamiast zwyklego Object Storage.
+> Powod: Cloud Archive jest tanszy. Oficjalne stawki OVH (2026):
+>
+> | Skladnik | Stawka netto | Stawka brutto |
+> |---|---|---|
+> | Storage | 0,0000132 PLN/GiB/godz = **9,64 PLN/TiB/mc** | **~11,86 PLN/TiB/mc** |
+> | Zapis (ingress) | 0,04 PLN/GiB | ~0,049 PLN/GiB |
+> | Egress (restore) | **DARMOWY** | **DARMOWY** |
+>
+> **Konsekwencje architektoniczne:**
+> - Obiekty wymagaja **unsealing** przed GET (minuty do godzin)
+> - Recovery Mode (restore) musi obslugiwac opoznienie unsealing (state THAWING)
+> - `OvhSwiftClient.kt` musi obslugiwac: unseal request, polling status, retry
+> - Segmentacja DLO/SLO dla obiektow >5GB (nasze paczki 900-950MB powinny isc jako single PUT)
+> - Egress darmowy = restore NIE kosztuje klienta (duzy plus!)
+> - Stawka storage identyczna jak w korekcie 1 (0,009636 PLN/GiB/mc) — to ta sama cena
+>
+> **Stawka robocza NOWA:** `0,0000132 PLN netto/GiB/godz` × 730h = `0,009636 PLN/GiB/mc`
+> (identyczna liczba — OVH Cloud Archive ma taka sama stawke jak Object Storage w tym regionie).
+>
+> Pełna analiza cenowa: `pricing-and-storage-economics.md`.
+> Plan sesji: `session-orchestration-plan.md`.
+
 **Lifecycle policy:**
 - Plik > 90 dni bez restore -> tier transition `hot -> cold`
 - Plik > 1 rok bez restore -> `cold -> frozen` (lub planowany delete dla wygaslych userow)
