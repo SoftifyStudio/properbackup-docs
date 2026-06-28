@@ -19,10 +19,12 @@ Dane klientow przechowujemy **WYLACZNIE na dedykowanym serwerze OVH**
 (Kimsufi KS-STOR, 4x4 TB HDD RAID5 = ~11 TB na `/mnt/storage`).
 **NIE replikujemy aplikacyjnie do Cloud Archive ani innej chmury.**
 
-- **Durability / offsite / DR:** realizowane na poziomie infrastruktury przez
-  **wlasny backup calego serwera OVH** (OVH server backup), NIE w kodzie aplikacji.
+- **Durability / offsite / DR:** kopia #2 docelowo na **drugim serwerze dedykowanym
+  (Proxmox Backup Server)** — koszt staly, inkrementalny+dedup. Na teraz: dowolna tania
+  kopia offsite („byle gdzie zgrane"). OVH cold odrzucone (za drogie, per-GB).
+  Pelny model DR: `pricing-and-storage-economics.md` §9.5 (kierunek 2026-06-28).
 - **Restore jest INSTANT** — brak unsealing/thawing. Pliki czytane bezposrednio
-  z lokalnego dysku.
+  z lokalnego dysku (hot RAID). Offsite sluzy WYLACZNIE do DR (padl caly primary).
 
 ### Konsekwencje dla kodu
 1. **Storage backend** = interfejs `StorageClient` + `LocalFsStorageClient`
@@ -376,7 +378,7 @@ properbackup-buffer/
    - Status kazdego backupu: IN_PROGRESS / SEALED / FLUSHED / VERIFIED
 
 2. **Storage quota dashboard** (web):
-   - Pokazuj: "Wykorzystano X GB / 2 TB" (fizyczne bajty z historia)
+   - Pokazuj: "Wykorzystano X GB / <quota tieru> GB" (fizyczne bajty z historia; quota wg tieru S/M/L/XL, patrz §5)
    - Progress bar z kolorami (zielony < 70%, zolty 70-90%, czerwony > 90%)
    - Powiadomienie w UI gdy blisko limitu
    - Info: "Przejdz na plan roczny" lub "Backup zatrzyma sie za X dni" (szacowanie)
@@ -395,8 +397,8 @@ properbackup-buffer/
    - Kalendarz: mozliwosc ustawienia okna backupowego (np. 00:00-06:00)
 
 5. **Plan display**:
-   - Jeden plan — wyraznie komunikuj "Unlimited devices, 2 TB space"
-   - (Szczegoly cenowe — do potwierdzenia przez Daniela, patrz nizej)
+   - Tiery S/M/L/XL — komunikuj "Unlimited devices" + quota wybranego tieru (patrz §5)
+   - (Pelny cennik i quota: §5 nizej + `pricing-and-storage-economics.md` §9)
 
 ### Definition of Done
 - Timeline: nowy backup pojawia sie w UI w < 3s od seal (SSE)
@@ -408,7 +410,12 @@ properbackup-buffer/
 
 ## 5. Model cenowy — ZATWIERDZONY (2026-06-20, decyzja Daniela)
 
-### Fakty (OVH Cloud Archive, netto)
+> ⚠ **Koszt NASZ = STAŁY serwer (dedyk OVH ~135 zł brutto/mc).** Pełny model kosztu,
+> marży i quoty: `pricing-and-storage-economics.md` §9 (NADRZĘDNE). Poniższe stawki
+> per-GB OVH to już tylko **benchmark/historia**, NIE nasz koszt. Offsite DR robimy
+> drugim serwerem (PBS), nie OVH cold (odrzucone jako za drogie) — patrz §9.5.
+
+### Fakty (OVH Cloud Archive — tylko benchmark/historia, netto)
 - Storage: 0,0000132 PLN/GiB/godz = **9,64 PLN/TiB/mc netto** = **11,86 PLN/TiB/mc brutto**
 - Zapis (ingress): **0,04 PLN/GiB netto** = **0,049 PLN/GiB brutto**
 - Egress (restore): **DARMOWY**
@@ -416,8 +423,8 @@ properbackup-buffer/
 
 ### Cennik (FINAL)
 
-Unlimited devices w kazdym tierze. Quota = start quota, rosnie +150 GB/mc, max 2 TB.
-Quota liczona na **fizycznych bajtach po kompresji** (co faktycznie siedzi na OVH).
+Unlimited devices w kazdym tierze. Quota = start quota, rośnie **+10% startu/mc, sufit 2× startu per tier** (Opcja 2 — NIE wspólne 2 TB dla każdego). Pełne liczby: `pricing-and-storage-economics.md` §9.4.
+Quota liczona na **fizycznych bajtach po kompresji** (co faktycznie siedzi na dedyku).
 
 | Tier | Start quota | Cena mc | Cena rok (~25% rabat) | Zysk worst case 1mc + 90dni ret. |
 |---|---|---|---|---|
@@ -428,8 +435,8 @@ Quota liczona na **fizycznych bajtach po kompresji** (co faktycznie siedzi na OV
 
 ### Zasady
 
-- **Retencja po rezygnacji:** 90 dni. Dane dostepne do restore (canRestore=true), backup zatrzymany (canUpload=false). Po 90 dniach: email ostrzegawczy 7 dni przed → fizyczne usuniecie z OVH
-- **Zacheta do rocznego:** nie rabat cenowy, ale roczny = pelna start quota od razu (bez progresywnego wzrostu? — do decyzji)
+- **Retencja po rezygnacji:** 90 dni. Dane dostepne do restore (canRestore=true), backup zatrzymany (canUpload=false). Po 90 dniach: email ostrzegawczy 7 dni przed → fizyczne usuniecie z serwera/dysku
+- **Zacheta do rocznego:** roczny = **pełny sufit tieru (2× start) od razu**, bez progresywnego wzrostu (ZATWIERDZONE 2026-06-21)
 - **Downgrade:** jezeli current usage > nowa quota → backup zatrzymany (canUpload=false). Dane przechowywane. Klient musi wyczyscic albo wrocic na wyzszy tier
 - **Unlimited devices:** quota WSPOLNA dla wszystkich urzadzen. Web UI jasno komunikuje: "Wiecej urzadzen = szybsze zuzycie limitu"
 - **Kompresja:** GZIPOutputStream przed AES-256-GCM. Klient "widzi" wiecej miejsca niz fizycznie zajmuje (bonus)
