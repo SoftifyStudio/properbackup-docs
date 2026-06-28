@@ -12,6 +12,7 @@ się w dziesiątkach plików `architecture/` — czytaj stąd, nie stamtąd.
 | [`3-CO-JEST-ZROBIONE.md`](3-CO-JEST-ZROBIONE.md) | Stan prac: gotowe / w toku / do zrobienia | Daniel / AI |
 | [`4-JAK-TO-URUCHOMIC.md`](4-JAK-TO-URUCHOMIC.md) | Gdzie co stoi, dedyk OVH, deploy | Daniel / AI |
 | [`5-DLA-AGENTA-AI.md`](5-DLA-AGENTA-AI.md) | Jak zlecać zadania Devinowi, żeby nie błądził | Daniel |
+| [`6-ZADANIE-TESTY-E2E.md`](6-ZADANIE-TESTY-E2E.md) | ⭐ **AKTYWNE ZADANIE** — budowa prawdziwych testów E2E (Playwright + nagrania) | AI |
 
 ## Jedna zasada, żeby się znów nie rozjechało
 
