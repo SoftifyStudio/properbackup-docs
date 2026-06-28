@@ -52,7 +52,16 @@ Docker Compose w **`/opt/properbackup`** (pliki: `docker-compose.yml`, `.env`,
   **`OVH_DEDICATED_SERVER_PROXMOX_ROOT_PASSWORD`** (zapisany globalnie, dostepny
   we wszystkich sesjach Devin).
 - Wejscie do kontenera: `pct exec 100 -- bash -lc '<cmd>'` lub `pct enter 100`.
-- Publiczne endpointy aplikacji: buffer `:8080`, web `:80`.
+- Dostep administracyjny (SSH, panel Proxmox `:8006`) jest **za VPN/firewallem**, nie z publicznego internetu.
+
+### 5a. Bezpieczenstwo dostepu — zweryfikowane 2026-06-28
+Skan z publicznego internetu (spoza VPN): porty **22 (SSH), 8006 (Proxmox), 80, 443,
+8080, 5432 (Postgres) sa FILTERED** (brak odpowiedzi). Wniosek: serwer **nie wystawia
+publicznie zadnej powierzchni administracyjnej ani aplikacyjnej** — dostep tylko przez
+VPN/firewall. Dlatego sama obecnosc IP w docs to niskie ryzyko.
+> Uwaga: gdy aplikacja pojdzie na produkcje dla klientow, web/buffer beda musialy byc
+> publiczne (lub za reverse-proxy/CDN) — wtedy te porty przestana byc filtered i trzeba
+> bedzie zadbac o TLS + hardening. Dzis (pre-launch) wszystko jest zamkniete.
 
 ## 6. Co zostalo do zrobienia (gdzie skonczyl setup)
 - [x] Proxmox + RAID5 11 TB + LXC + Docker/JDK/Node

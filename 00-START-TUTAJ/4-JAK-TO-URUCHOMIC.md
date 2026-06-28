@@ -15,6 +15,7 @@
 > — nie powielamy ich tutaj (mniej miejsc = mniej powierzchni do wycieku).
 
 ## Dostęp
+- **Dostęp administracyjny (SSH + panel Proxmox) jest za VPN/firewallem** — z publicznego internetu wszystkie porty są filtered (zweryfikowane 2026-06-28). Szczegóły i dowód: `deployment-dedicated-server.md` §5/§5a.
 - SSH do hosta Proxmox + nazwa sekretu z hasłem root: patrz `deployment-dedicated-server.md` §5 (sekret dostępny globalnie w sesjach Devina).
 - Wejście do kontenera: `pct enter 100` (lub `pct exec 100 -- bash -lc '<cmd>'`).
 - Endpointy aplikacji: buffer `:8080`, web `:80`.
