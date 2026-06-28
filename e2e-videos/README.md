@@ -50,6 +50,24 @@ Test code: [`properbackup-web/tests/e2e/recovery-e2e.spec.js`](https://github.co
 - **Test 7:** Backend now blocks Account B via card fingerprint validation in PostgreSQL + `abuse_blocked` flag in `activateSubscription` transaction
 - **Test 10:** Backend sets `past_due` status + 7-day grace period instead of immediate lockout. Frontend shows yellow warning banner.
 
+## Videos (2026-06-28 — backup-core full pipeline na dedyku LXC 100)
+
+Directory: `2026-06-28-backup-core-pipeline/`
+
+Pełny przepływ **agent → buffer → seal → /mnt/storage → restore → SHA-256** na NAJNOWSZYM kodzie (gałęzie 21.06: `backup-core-storage-pipeline` + `restore-protocol` + `recovery-e2e-qa-suite` + `recovery-mode-ui`), uruchamiany WEWNĄTRZ kontenera LXC 100 przeciw żywemu stackowi (panel `:80`, buffer `:8080`, postgres w dockerze, RAID5 `/mnt/storage`). Asercje DB-first (PostgreSQL) + plik na dysku; UI wtórnie.
+
+| # | File | Test | Time | Status |
+|---|------|------|------|--------|
+| 1 | `test01-full-pipeline-restore.webm` | agent `--once` → upload → `POST /flush` (seal) → nowy `archive_snapshot` (flag=A) → `.enc` na `/mnt/storage/backups` (rozmiar = DB) → `GET /api/objects/{name}` → AES-256-GCM decrypt → `tar xzf` → **SHA-256 każdego pliku = oryginał** + `.properbackup-idx` obecny, zero plików-pasożytów | ~5s | PASS (2×) |
+
+Co realnie weryfikuje (BEZ mocków szyfrowania/seal/restore/SHA-256):
+- **Backup**: świeże, unikatowe pliki źródłowe za każdym runem → agent skanuje, pakuje (tar.gz + `.properbackup-idx`), szyfruje AES-256-GCM (PBKDF2-SHA256 200k), uploaduje do buffera.
+- **Seal**: `POST /flush` zapieczętowuje fragmenty w obiekt `.enc` na `/mnt/storage/backups`; powstaje wiersz `archive_snapshot`.
+- **DB-first**: `archive_snapshot` count rośnie, najnowszy snapshot ma `flag='A'`, `sealed_at` w oknie runu, `size_bytes` = rozmiar pliku na dysku.
+- **Restore**: pobranie `.enc` przez panel `/api/objects`, deszyfrowanie po stronie klienta, ekstrakcja tar.gz, **SHA-256 bajt-w-bajt = oryginał**.
+
+Test code: [`properbackup-web/tests/e2e/backup-core-e2e.spec.js`](https://github.com/SoftifyStudio/properbackup-web/tree/main/tests/e2e/backup-core-e2e.spec.js) (config: `playwright.backup-core.config.js`, helpery: `helpers/localPipeline.js` + `helpers/properCrypto.js`). Natywne wideo Playwright (`video:'on'`), `workers=1`, zielony 2× pod rząd.
+
 ## Videos (2026-05-31 — money module hardening)
 
 Directory: `2026-05-31/`
