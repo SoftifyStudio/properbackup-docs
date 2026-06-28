@@ -39,5 +39,5 @@ niskobudżetowe (VPS / Dedicated / ARM64) i serwery Minecraft.
 
 - **Cennik:** S 29 zł/mc (259 zł/rok) · M 39 (349) · L 59 (529) · XL 89 (790) — unlimited devices, ~25% taniej rocznie. Pełny model: [`00-START-TUTAJ/2-DECYZJE-AKTUALNE.md`](00-START-TUTAJ/2-DECYZJE-AKTUALNE.md).
 - **Storage (primary):** dedykowany serwer OVH (Kimsufi KS-STOR, RAID5 ~10–11 TB, `/mnt/storage`), **restore instant** (bez odmrażania).
-- **DR / offsite:** kopia #2 na OVH cold/backup (write-once, EU, RODO).
+- **DR / offsite:** docelowo drugi serwer dedykowany (Proxmox Backup Server); na teraz dowolna tania kopia offsite („byle gdzie zgrane"). OVH cold odrzucone (za drogie).
 - **Koszt nasz:** stały ~135 zł brutto/mc za cały serwer (nie per-GB). Próg rentowności ~5 klientów S. Marża operacyjna ~75–90%.

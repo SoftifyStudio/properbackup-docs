@@ -63,7 +63,7 @@ rate limit flushy, weryfikacja email, alerty).
 
 ## 8. Infrastruktura i model kosztu (NAJWIĘKSZA zmiana vs v6.2)
 - **Storage primary = dedykowany serwer OVH** (RAID5 ~10–11 TB, `/mnt/storage`), restore instant.
-- **DR = OVH cold/backup** (offsite kopia #2, EU/RODO).
+- **DR docelowo = drugi serwer dedykowany (Proxmox Backup Server)** — identyczny box tylko na backupy, koszt stały, inkrementalny+dedup. Na teraz: dowolna tania kopia offsite („byle gdzie zgrane"). OVH cold odrzucone jako za drogie (per-GB).
 - **Koszt = STAŁY ~135 zł brutto/mc** za cały serwer (nie per-GB jak w v6.2).
 - Szczegóły: [kanon §B/§C/§D](../00-START-TUTAJ/2-DECYZJE-AKTUALNE.md#b-storage--gdzie-leza-dane-zatwierdzony-2026-06-20) + [`../architecture/pricing-and-storage-economics.md`](../architecture/pricing-and-storage-economics.md) §9.
 
@@ -86,15 +86,15 @@ rate limit flushy, weryfikacja email, alerty).
 ## 11. Analiza ryzyk (kluczowe)
 - **Dystrybucja > produkt (80/20).** Największe ryzyko to nie „czy zbudujemy", tylko „czy dotrzemy do agencji WP". Mitygacja: rozdz. 6.
 - **Sufit pojemności + immutability.** „Nigdy nie kasujemy" → fizyczne bajty rosną; quota (sufit 2×) domyka box, ale trzeba monitorować zapełnienie i komunikować klientowi „backup zatrzyma się za ~X dni". Ratuje dedup + kompresja (~40%).
-- **DR / single-server.** Jeden serwer + RAID5; offsite na OVH cold rozwiązuje „jedną lokalizację" i RODO, ale RTO przy pełnym odtworzeniu jest długie. Świadome ryzyko fazy bootstrap; trigger graduacji (drugi serwer / object storage EU) przy ~50% zapełnienia lub rosnącej liczbie obcych klientów.
+- **DR / single-server.** Jeden serwer + RAID5; dopóki nie ma drugiego serwera/PBS, offsite jest prowizoryczne („byle gdzie zgrane"). Docelowo drugi dedyk (Proxmox Backup Server) daje koszt stały i RODO; przed sprzedażą obcym offsite musi mieć umowę powierzenia. Trigger postawienia: ~50% zapełnienia primary lub rosnąca liczba obcych klientów.
 - **Konwersja niższa niż optymistycznie.** Realnie 3–7%, nie 17% → po 100 klientów potrzeba ~1 500–2 000 trialów/rok. Stąd nacisk na segment WP (konwertuje lepiej).
 
 ## 12. Roadmapa
-1. **MVP / dokończenie** (sprint Devin) — zostało: deploy najnowszego kodu na dedyk + pełny E2E + DR na OVH cold (patrz [`../00-START-TUTAJ/3-CO-JEST-ZROBIONE.md`](../00-START-TUTAJ/3-CO-JEST-ZROBIONE.md)).
+1. **MVP / dokończenie** (sprint Devin) — zostało: deploy najnowszego kodu na dedyk + pełny E2E + prowizoryczny offsite DR (docelowo drugi serwer/PBS) (patrz [`../00-START-TUTAJ/3-CO-JEST-ZROBIONE.md`](../00-START-TUTAJ/3-CO-JEST-ZROBIONE.md)).
 2. **Dowody**: nagrania „disaster → restore → Audit PDF", rozbudowa landingu `softify-website /properbackup`.
 3. **Dystrybucja**: content pod triggery (MC/self-host) + cold outreach do agencji WP.
-4. **Legal**: DPA + umowa powierzenia (OVH cold) przed sprzedażą obcym.
-5. **Skalowanie**: drugi serwer wg triggera.
+4. **Legal**: DPA + umowa powierzenia (offsite DR) przed sprzedażą obcym.
+5. **Skalowanie / DR docelowy**: drugi serwer dedykowany (PBS na backupy) wg triggera.
 
 ## 13. Kill-switch / scenariusz wyjścia
 Koszt stały jest niski (serwer ~135 zł/mc + AI), więc eksperyment jest tani. Jeśli po

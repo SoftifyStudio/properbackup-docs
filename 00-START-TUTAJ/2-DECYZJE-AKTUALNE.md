@@ -38,13 +38,15 @@ Płatność roczna ≈ 25% taniej **i** od razu pełny sufit tieru.
 
 ---
 
-## C. DR / kopia zapasowa (ZATWIERDZONY 2026-06-28)
+## C. DR / kopia zapasowa (kierunek 2026-06-28)
 
-- **3-2-1:** kopia #1 = dedyk OVH (hot RAID, instant restore); **kopia #2 = OVH cold/backup** (offsite, write-once, „wrzuć raz, leży tanio na taśmach").
-- **Restore z cold = tylko ścieżka DR** (gdy padnie cały dedyk). Odmrażanie (godziny) jest tu akceptowalne — zwykły restore klienta zawsze idzie z hot RAID.
-- **Wymóg:** kopia inkrementalna + automatyczna + **okresowy testowy restore** (backup nieprzetestowany = brak backupu).
-- **RODO:** OVH cold zostaje w EU, z umową powierzenia → rozwiązuje „jedna lokalizacja" i zgodność dla danych obcych klientów (dysk domowy tego nie dawał — odrzucony jako jedyny offsite).
-- ⚠ **Otwarte ryzyko (świadome, faza bootstrap):** jeden serwer + RAID5 (przeżyje 1 dysk). Pełne odtworzenie 10 TB z cold trwa długo (RTO). Trigger graduacji (drugi serwer / object storage EU): zapełnienie boxa > ~50% **lub** rosnąca liczba płacących obcych.
+- **Kopia #1 (primary):** dedyk OVH (hot RAID, instant restore).
+- **Kopia #2 (offsite) — DOCELOWO: drugi serwer dedykowany jako Proxmox Backup Server (PBS).** Identyczny box jak primary, ale wyłącznie na backupy. PBS robi **inkrementalne, deduplikowane** kopie → koszt **stały** (~135 zł/mc za box), nie rosnący per-GB. *Status: plan / pomysł, NIE teraz.*
+- **Na teraz (interim):** „byle gdzie zgrane" — **wystarczy jakakolwiek tania kopia offsite**, żeby kopia #2 w ogóle istniała (np. dysk domowy / inny dostępny zasób). Cel: nie zostać z jedną kopią.
+- ❌ **OVH cold/backup — odrzucone jako za drogie** (koszt rośnie per-GB razem z danymi; sprzeczne z modelem kosztu stałego). Zostaje co najwyżej jako ostateczność.
+- **Wymóg (każdy wariant):** kopia inkrementalna + automatyczna + **okresowy testowy restore** (backup nieprzetestowany = brak backupu).
+- ⚠ **Otwarte ryzyko (świadome, faza bootstrap):** dopóki nie ma drugiego serwera/PBS, offsite jest prowizoryczne. **RODO:** przed sprzedażą obcym klientom offsite musi mieć umowę powierzenia (drugi serwer w DC / zasób EU) — prowizorka domowa nie jest zgodna dla cudzych danych.
+- **Trigger postawienia PBS / drugiego serwera:** zapełnienie primary > ~50% **lub** rosnąca liczba płacących obcych klientów.
 
 ---
 

@@ -19,11 +19,12 @@ Dane klientow przechowujemy **WYLACZNIE na dedykowanym serwerze OVH**
 (Kimsufi KS-STOR, 4x4 TB HDD RAID5 = ~11 TB na `/mnt/storage`).
 **NIE replikujemy aplikacyjnie do Cloud Archive ani innej chmury.**
 
-- **Durability / offsite / DR:** kopia #2 (offsite) na **OVH cold/backup**
-  (write-once, tanio), na poziomie infrastruktury, NIE w kodzie aplikacji.
-  Pelny model DR: `pricing-and-storage-economics.md` §9.5 (decyzja 2026-06-28).
+- **Durability / offsite / DR:** kopia #2 docelowo na **drugim serwerze dedykowanym
+  (Proxmox Backup Server)** — koszt staly, inkrementalny+dedup. Na teraz: dowolna tania
+  kopia offsite („byle gdzie zgrane"). OVH cold odrzucone (za drogie, per-GB).
+  Pelny model DR: `pricing-and-storage-economics.md` §9.5 (kierunek 2026-06-28).
 - **Restore jest INSTANT** — brak unsealing/thawing. Pliki czytane bezposrednio
-  z lokalnego dysku (hot RAID). Cold OVH sluzy WYLACZNIE do DR (padl caly dedyk).
+  z lokalnego dysku (hot RAID). Offsite sluzy WYLACZNIE do DR (padl caly primary).
 
 ### Konsekwencje dla kodu
 1. **Storage backend** = interfejs `StorageClient` + `LocalFsStorageClient`
@@ -411,9 +412,10 @@ properbackup-buffer/
 
 > ⚠ **Koszt NASZ = STAŁY serwer (dedyk OVH ~135 zł brutto/mc).** Pełny model kosztu,
 > marży i quoty: `pricing-and-storage-economics.md` §9 (NADRZĘDNE). Poniższe stawki
-> per-GB OVH to już tylko koszt **offsite DR (OVH cold, kopia #2)** + benchmark, NIE koszt primary.
+> per-GB OVH to już tylko **benchmark/historia**, NIE nasz koszt. Offsite DR robimy
+> drugim serwerem (PBS), nie OVH cold (odrzucone jako za drogie) — patrz §9.5.
 
-### Fakty (OVH cold/backup = offsite DR + benchmark, netto)
+### Fakty (OVH Cloud Archive — tylko benchmark/historia, netto)
 - Storage: 0,0000132 PLN/GiB/godz = **9,64 PLN/TiB/mc netto** = **11,86 PLN/TiB/mc brutto**
 - Zapis (ingress): **0,04 PLN/GiB netto** = **0,049 PLN/GiB brutto**
 - Egress (restore): **DARMOWY**

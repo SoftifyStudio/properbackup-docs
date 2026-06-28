@@ -1,6 +1,6 @@
 # Pricing & Storage Economics — analiza opłacalności (robocza)
 
-Wersja: 0.3 — **2026-06-05: utworzono (eksploracja).** **2026-06-21: dopisano §9 — model kosztu STAŁY SERWER (dedyk), NADRZĘDNY dla kosztu/marży.** **2026-06-28: §9.5 DR zmienione na OVH cold/backup jako offsite (zamiast dysku domowego) — decyzja Daniela.**
+Wersja: 0.3 — **2026-06-05: utworzono (eksploracja).** **2026-06-21: dopisano §9 — model kosztu STAŁY SERWER (dedyk), NADRZĘDNY dla kosztu/marży.** **2026-06-28: §9.5 DR — kierunek docelowy = drugi serwer dedykowany (Proxmox Backup Server); OVH cold odrzucone jako za drogie (per-GB). Na teraz offsite prowizoryczny — decyzja Daniela.**
 Status: **§9 ZATWIERDZONA (Daniel, 2026-06-21/28)** dla struktury kosztów, quoty i DR. Sekcje 1–8 to wcześniejsza eksploracja pod cold storage — stawki OVH Cloud Archive zostają **już tylko jako benchmark/historia kosztu primary**, NIE są naszym kosztem storage hot. **Aktualny model kosztu = §9.**
 Powiązane: `ovh-cloud-archive-migration-spec.md` (HR-1 immutability, koszty per GB), `master-tdd-plan.md` (Dodatek F — D-5/D-6), `buffer-core-master-spec.md` (dedup/ChunkSealer/DifferentialScanner), `minecraft-plugin-master-spec.md` (profil ciężkiego klienta MC).
 
@@ -27,8 +27,8 @@ Powiązane: `ovh-cloud-archive-migration-spec.md` (HR-1 immutability, koszty per
 > ⚠ **SUPERSEDED jako NASZ koszt primary (2026-06-21).** Poniższe stawki per-GB dotyczą
 > OVH Cloud Archive (cold storage), z którego **zrezygnowaliśmy jako primary** na rzecz
 > dedykowanego serwera (koszt **stały**, nie per-GB). Te liczby zostają **jako benchmark
-> rynkowy** oraz jako realny koszt **offsite DR** (kopia #2 na OVH cold — patrz §9.5).
-> Nasza realna struktura kosztu i marży primary = **§9**.
+> rynkowy** (offsite DR robimy inaczej — drugim serwerem dedykowanym/PBS, patrz §9.5;
+> OVH cold odrzucone jako za drogie). Nasza realna struktura kosztu i marży primary = **§9**.
 
 > **DECYZJA Daniela (2026-06-05):** liczymy **jedną płaską stawkę** storage.
 > OVH typowo ma jedną cenę; tańszy „cold" (~20% taniej) **nie jest wart** dodatkowej
@@ -199,7 +199,7 @@ nie najtańszy GB.
 - **Stary model (cold storage):** płaciliśmy OVH per-GB (~11,86 zł brutto/TiB/mc + ingest). Koszt **rósł razem z danymi** (zmienny) — był dodatni od pierwszego klienta.
 - **Nowy model (dedyk):** **stały ~109 zł netto/mc ≈ 135 zł brutto/mc** za cały serwer, na którym mamy **realnie ~10 TB** na dane klientów (RAID5 4×4 TB → ~11 TB minus narzut/headroom).
 - **Koszt all-in: ~13,5 zł brutto/TB/mc** — ale **tylko przy pełnym boxie**. Płacisz 135 zł niezależnie od tego, czy masz 1 czy 60 klientów.
-- **Offsite/DR:** kopia #2 na **OVH cold/backup** (write-once, tanio na taśmach) — patrz §9.5.
+- **Offsite/DR:** docelowo **drugi serwer dedykowany (Proxmox Backup Server)** — koszt stały, nie per-GB; na teraz prowizoryczna tania kopia. OVH cold odrzucone (za drogie) — patrz §9.5.
 - **Wniosek:** marża jest świetna, ale **trzeba box zapełnić**, a przychód per box ma **twardy sufit** (skalowanie = dokładanie serwerów).
 
 ### 9.2 Próg rentowności (pokrycie 135 zł/mc)
@@ -255,17 +255,18 @@ Reguła: quota startowa rośnie **+10% startu/mc**, aż do **2× startu** (tward
 
 > **Dwa pokrętła** (do dostrojenia): tempo wzrostu (domyślnie +10%/mc) i mnożnik sufitu (domyślnie 2×).
 
-### 9.5 DR / offsite: OVH cold/backup jako kopia #2 (decyzja 2026-06-28)
+### 9.5 DR / offsite: docelowo drugi serwer (Proxmox Backup Server) (kierunek 2026-06-28)
 
-> **Zmiana vs wcześniejszy pomysł „dysk domowy".** Offsite robimy na **OVH cold/backup**
-> (write-once, tanie przechowywanie „na taśmach"). Dysk domowy zostaje co najwyżej jako
-> dodatkowa, opcjonalna kopia bootstrap — NIE jako jedyny offsite.
+> **Zmiana vs wcześniejszy pomysł.** OVH cold/backup **odrzucone jako za drogie** — jego
+> koszt rośnie per-GB razem z danymi, co psuje cały sens modelu kosztu STAŁEGO (§9.1).
+> Kierunek docelowy: **drugi serwer dedykowany jako Proxmox Backup Server (PBS)**.
 
-- **3-2-1:** kopia #1 = dedyk OVH local RAID (hot, instant restore), kopia #2 = **OVH cold/backup** (offsite, inna warstwa/lokalizacja, EU).
-- **Charakter cold:** „wrzuć raz, leży tanio". Stawka ~9–10 zł brutto/TB/mc (jedna kopia DR rośnie z danymi, ale to jeden egzemplarz i tani).
-- **Restore z cold = ścieżka DR, nie zwykły restore** — odmrażanie (godziny) jest akceptowalne, bo używane tylko gdy padnie cały dedyk. Codzienny restore klienta idzie z hot RAID (instant).
+- **Kopia #1 (primary):** dedyk OVH local RAID (hot, instant restore).
+- **Kopia #2 (offsite) — DOCELOWO: drugi dedyk = PBS.** Identyczny box jak primary, wyłącznie na backupy. PBS = **inkrementalne + deduplikowane** kopie → koszt **stały** (~135 zł/mc za drugi box), nie rosnący per-GB. *Status: plan, nie teraz.*
+- **Na teraz (interim):** „byle gdzie zgrane" — jakakolwiek tania kopia offsite (np. dysk domowy / inny zasób), żeby kopia #2 w ogóle istniała.
+- **Restore z offsite = ścieżka DR, nie zwykły restore** — używane tylko gdy padnie cały primary. Codzienny restore klienta idzie z hot RAID (instant).
 - **Wymóg:** kopia **inkrementalna + automatyczna** + **okresowy testowy restore** (backup nieprzetestowany = brak backupu — nasze główne hasło).
-- **RODO:** OVH cold zostaje w EU, z umową powierzenia — rozwiązuje obiekcję „jedna lokalizacja" i zgodność dla danych obcych klientów (czego dysk domowy nie dawał).
+- **RODO:** przed sprzedażą obcym klientom offsite musi mieć umowę powierzenia (drugi serwer w DC / zasób EU); prowizorka domowa nie jest zgodna dla cudzych danych.
 
 ### 9.6 Skalowanie i RODO
 - **Sufit przychodu per box** (§9.3/§9.4). Skalowanie = **dokładanie serwerów** — każdy kolejny to +135 zł/mc i +~10 TB (kolejny stały skok), nie nieskończony wzrost na jednym.
@@ -294,7 +295,7 @@ na temat progów i overage.
 > **AKTUALIZACJA 2026-06-21/28 — świadomy pivot.** Powyżej odrzucono „self-host na
 > RAID" i „dyski w domu" jako **primary** storage. Decyzja świadomie przyjmuje **dedyk
 > OVH jako primary** (koszt stały, §9), a obiekcję „jedna lokalizacja" rozwiązuje
-> **offsite na OVH cold/backup (§9.5)** + plan graduacji (§9.6). To nie unieważnia
+> **offsite (docelowo drugi serwer/PBS, §9.5)** + plan graduacji (§9.6). To nie unieważnia
 > ostrzeżeń z tej tabeli — to ich **kontrolowane przyjęcie** z poprawnym offsite.
 
 ---

@@ -13,7 +13,7 @@
 ## 🟡 W toku / wymaga domknięcia
 - **Pełny zintegrowany E2E na docelowym dedyku, na NAJNOWSZYM kodzie**: agent → buffer → pack → `/mnt/storage` → restore → weryfikacja SHA-256. Na serwerze stoi dziś **stary, ręcznie złożony build** (patrz [`../architecture/deployment-dedicated-server.md`](../architecture/deployment-dedicated-server.md) §4/§6).
 - **Quota „Opcja 2" w kodzie**: reguła +10%/mc, sufit 2× per tier — sprawdzić, czy `StorageQuotaGuard`/billing liczą zgodnie z kanonem ([`2-DECYZJE-AKTUALNE.md`](2-DECYZJE-AKTUALNE.md) A).
-- **DR na OVH cold**: skonfigurować inkrementalną kopię #2 + automat + testowy restore (decyzja z 2026-06-28, jeszcze nie wdrożona).
+- **Offsite DR (kopia #2)**: na teraz prowizorka „byle gdzie zgrane" (jakakolwiek tania kopia + automat + testowy restore). Docelowo drugi serwer dedykowany (Proxmox Backup Server). OVH cold odrzucone (za drogie).
 - **Waluta w panelu**: `properbackup-web` pokazuje USD — uspójnić z PLN.
 
 ## ⬜ Do zrobienia (przed „sprzedażą ze spokojną głową")
