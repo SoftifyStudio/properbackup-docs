@@ -54,19 +54,21 @@ Test code: [`properbackup-web/tests/e2e/recovery-e2e.spec.js`](https://github.co
 
 Directory: `2026-06-28-backup-core-pipeline/`
 
-Pełny przepływ **agent → buffer → seal → /mnt/storage → restore → SHA-256** na NAJNOWSZYM kodzie (gałęzie 21.06: `backup-core-storage-pipeline` + `restore-protocol` + `recovery-e2e-qa-suite` + `recovery-mode-ui`), uruchamiany WEWNĄTRZ kontenera LXC 100 przeciw żywemu stackowi (panel `:80`, buffer `:8080`, postgres w dockerze, RAID5 `/mnt/storage`). Asercje DB-first (PostgreSQL) + plik na dysku; UI wtórnie.
+Pełny przepływ **agent → buffer → seal → /mnt/storage → restore → SHA-256** na NAJNOWSZYM kodzie (gałęzie 21.06: `backup-core-storage-pipeline` + `restore-protocol` + `recovery-e2e-qa-suite` + `recovery-mode-ui`), uruchamiany WEWNĄTRZ kontenera LXC 100 przeciw żywemu stackowi (panel `:80`, buffer `:8080`, postgres w dockerze, RAID5 `/mnt/storage`). Asercje DB-first (PostgreSQL) + plik na dysku; restore **napędzany przez UI panelu** (warstwa oglądalności, nie zamiennik weryfikacji).
 
 | # | File | Test | Time | Status |
 |---|------|------|------|--------|
-| 1 | `test01-full-pipeline-restore.webm` | agent `--once` → upload → `POST /flush` (seal) → nowy `archive_snapshot` (flag=A) → `.enc` na `/mnt/storage/backups` (rozmiar = DB) → `GET /api/objects/{name}` → AES-256-GCM decrypt → `tar xzf` → **SHA-256 każdego pliku = oryginał** + `.properbackup-idx` obecny, zero plików-pasożytów | ~5s | PASS (2×) |
+| 1 | `test01-full-pipeline-restore.webm` | **UI-driven restore**: agent `--once` → `POST /flush` (seal) → DB `archive_snapshot` (flag=A) + `.enc` na `/mnt/storage` (rozmiar = DB) → **login formularzem** → **servers → Timeline → wybór snapshotu → Restore (kreator: Snapshot → Password → Thawing → Download)** → AES-256-GCM decrypt w przeglądarce (Web Crypto) → na ekranie „Downloaded and decrypted" → `tar xzf` → **SHA-256 każdego pliku = oryginał** + `.properbackup-idx`, zero plików-pasożytów | ~23s | PASS (2×) |
 
 Co realnie weryfikuje (BEZ mocków szyfrowania/seal/restore/SHA-256):
 - **Backup**: świeże, unikatowe pliki źródłowe za każdym runem → agent skanuje, pakuje (tar.gz + `.properbackup-idx`), szyfruje AES-256-GCM (PBKDF2-SHA256 200k), uploaduje do buffera.
 - **Seal**: `POST /flush` zapieczętowuje fragmenty w obiekt `.enc` na `/mnt/storage/backups`; powstaje wiersz `archive_snapshot`.
 - **DB-first**: `archive_snapshot` count rośnie, najnowszy snapshot ma `flag='A'`, `sealed_at` w oknie runu, `size_bytes` = rozmiar pliku na dysku.
-- **Restore**: pobranie `.enc` przez panel `/api/objects`, deszyfrowanie po stronie klienta, ekstrakcja tar.gz, **SHA-256 bajt-w-bajt = oryginał**.
+- **Restore (UI-driven)**: realny login przez formularz panelu, nawigacja servers → Timeline, wybór snapshotu i uruchomienie restore klikając w kreatorze Recovery, deszyfrowanie po stronie przeglądarki (Web Crypto API), widoczne na ekranie potwierdzenie „Downloaded and decrypted". Po stronie testu: ekstrakcja tar.gz + **SHA-256 bajt-w-bajt = oryginał** wyjścia restore'u z UI. Wideo trwa ~23 s realnego przebiegu (nie pusty 1-2 s).
 
-Test code: [`properbackup-web/tests/e2e/backup-core-e2e.spec.js`](https://github.com/SoftifyStudio/properbackup-web/tree/main/tests/e2e/backup-core-e2e.spec.js) (config: `playwright.backup-core.config.js`, helpery: `helpers/localPipeline.js` + `helpers/properCrypto.js`). Natywne wideo Playwright (`video:'on'`), `workers=1`, zielony 2× pod rząd.
+> **Wersja UI-owa** (zastępuje wcześniejsze nagranie API-driven, które pokazywało puste okno przeglądarki bo cały restore leciał przez `page.request` + krypto w Node). Twarde asercje (DB-first + SHA-256 pliku na `/mnt/storage`) pozostają bez zmian — UI to warstwa oglądalności nagrania.
+
+Test code: [`properbackup-web/tests/e2e/backup-core-ui-e2e.spec.js`](https://github.com/SoftifyStudio/properbackup-web/tree/main/tests/e2e/backup-core-ui-e2e.spec.js) (config: `playwright.backup-core-ui.config.js`, helpery: `helpers/localPipeline.js` + `helpers/properCrypto.js`). Szybka asercja API pozostaje w [`backup-core-e2e.spec.js`](https://github.com/SoftifyStudio/properbackup-web/tree/main/tests/e2e/backup-core-e2e.spec.js). Naprawiony przy okazji realny bug: `RecoveryWizard` null-derefował `snapshot.node` przy restore z Timeline (snapshot-level), co wywalało panel na biały ekran. Natywne wideo Playwright (`video:'on'`), `workers=1`, zielony 2× pod rząd.
 
 ## Videos (2026-05-31 — money module hardening)
 
