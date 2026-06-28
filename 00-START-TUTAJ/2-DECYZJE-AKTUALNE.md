@@ -34,7 +34,8 @@ Płatność roczna ≈ 25% taniej **i** od razu pełny sufit tieru.
 - **Restore = INSTANT** — pliki czytane wprost z lokalnego dysku. Brak „odmrażania"/unsealing.
 - **NIE** ma już OVH Cloud Archive / Swift / unsealing w krytycznej ścieżce (relikt, za interfejsem `StorageClient` ale nieużywany).
 - Quota liczona na **fizycznych bajtach po kompresji** (`StorageQuotaGuard`).
-- **Immutability (HR-1):** nigdy nie kasujemy — usunięcie to tylko flaga `DELETED`. Fizyczne bajty **tylko rosną**. Dlatego dedup (DifferentialScanner, 4 MB chunki) + kompresja (~40% GZIP) są krytyczne dla opłacalności.
+- **Immutability (HR-1):** dla **aktywnego konta** nigdy nie kasujemy danych — usunięcie pliku przez klienta to tylko flaga `DELETED` (historia zostaje). Fizyczne bajty aktywnego konta **tylko rosną**. Dlatego dedup (DifferentialScanner, 4 MB chunki) + kompresja (~40% GZIP) są krytyczne dla opłacalności.
+- **Wyjątek — sprzątanie po rezygnacji (osobny cykl, NIE łamie HR-1):** dane konta **anulowanego** są fizycznie usuwane dopiero **po 90-dniowym oknie retencji** (patrz §A) — to czyszczenie porzuconych kont, nie kasowanie historii aktywnego klienta.
 
 ---
 

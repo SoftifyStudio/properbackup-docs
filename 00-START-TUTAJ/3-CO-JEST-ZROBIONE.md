@@ -19,7 +19,7 @@
 ## ⬜ Do zrobienia (przed „sprzedażą ze spokojną głową")
 - Deploy najnowszego kodu na dedyk + zielony pełny E2E (powyżej).
 - Landing marketingowy: dziś jest tryb „już wkrótce / zbieram chętnych" w `softify-website` (`/properbackup`) — do rozbudowy o dowody (Audit PDF demo, cennik finalny) przy starcie sprzedaży.
-- Legal/RODO: DPA + umowa powierzenia dla OVH cold przed sprzedażą obcym.
+- Legal/RODO: DPA + umowa powierzenia dla offsite DR (drugi serwer/PBS) przed sprzedażą obcym.
 - Dystrybucja (GTM): outreach do agencji WP/IT (patrz biznesplan).
 
 ## Uwaga o procesie

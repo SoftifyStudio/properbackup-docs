@@ -3,7 +3,7 @@
 > **Wersja:** 6.3 (2026-06-28). **Zastępuje** `Biznesplan_ProperBackup_v6.2_NAJLEPSZY.docx` (maj 2026).
 > Co się zmieniło względem v6.2: **storage** (chmura per-GB → dedykowany serwer OVH),
 > **cennik** (Hobby/Pro → S/M/L/XL), **model kosztu** (zmienny per-GB → stały serwer),
-> **DR** (OVH cold jako offsite). Liczby twarde (ceny/limity/koszt/DR) są w
+> **DR** (OVH cold odrzucone → docelowo drugi serwer dedykowany/PBS). Liczby twarde (ceny/limity/koszt/DR) są w
 > **kanonie**: [`../00-START-TUTAJ/2-DECYZJE-AKTUALNE.md`](../00-START-TUTAJ/2-DECYZJE-AKTUALNE.md).
 > Ten dokument tłumaczy „dlaczego", kanon mówi „ile".
 

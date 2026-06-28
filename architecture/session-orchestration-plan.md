@@ -378,7 +378,7 @@ properbackup-buffer/
    - Status kazdego backupu: IN_PROGRESS / SEALED / FLUSHED / VERIFIED
 
 2. **Storage quota dashboard** (web):
-   - Pokazuj: "Wykorzystano X GB / 2 TB" (fizyczne bajty z historia)
+   - Pokazuj: "Wykorzystano X GB / <quota tieru> GB" (fizyczne bajty z historia; quota wg tieru S/M/L/XL, patrz §5)
    - Progress bar z kolorami (zielony < 70%, zolty 70-90%, czerwony > 90%)
    - Powiadomienie w UI gdy blisko limitu
    - Info: "Przejdz na plan roczny" lub "Backup zatrzyma sie za X dni" (szacowanie)
@@ -397,8 +397,8 @@ properbackup-buffer/
    - Kalendarz: mozliwosc ustawienia okna backupowego (np. 00:00-06:00)
 
 5. **Plan display**:
-   - Jeden plan — wyraznie komunikuj "Unlimited devices, 2 TB space"
-   - (Szczegoly cenowe — do potwierdzenia przez Daniela, patrz nizej)
+   - Tiery S/M/L/XL — komunikuj "Unlimited devices" + quota wybranego tieru (patrz §5)
+   - (Pelny cennik i quota: §5 nizej + `pricing-and-storage-economics.md` §9)
 
 ### Definition of Done
 - Timeline: nowy backup pojawia sie w UI w < 3s od seal (SSE)
