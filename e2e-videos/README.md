@@ -59,6 +59,7 @@ Pełny przepływ **agent → buffer → seal → /mnt/storage → restore → SH
 | # | File | Test | Time | Status |
 |---|------|------|------|--------|
 | 1 | `test01-full-pipeline-restore.webm` | **UI-driven restore**: agent `--once` → `POST /flush` (seal) → DB `archive_snapshot` (flag=A) + `.enc` na `/mnt/storage` (rozmiar = DB) → **login formularzem** → **servers → Timeline → wybór snapshotu → Restore (kreator: Snapshot → Password → Thawing → Download)** → AES-256-GCM decrypt w przeglądarce (Web Crypto) → na ekranie „Downloaded and decrypted" → `tar xzf` → **SHA-256 każdego pliku = oryginał** + `.properbackup-idx`, zero plików-pasożytów | ~23s | PASS (2×) |
+| 2 | `test02-in-place-restore.webm` | **Agent-driven in-place restore (cofnięcie na osi czasu)**: backup → snapshot S1 → mutacja na dysku (modyfikacja + nowy plik + usunięcie) → **login formularzem → Timeline → klik „Przywróć"** → RecoveryStartModal → poll dry_run → **Confirm recovery** (restore 2 / delete 1) → RecoveryProgressCard (`AGENT_RESTORING` → `VERIFYING` → `DONE`) → na ekranie **„Recovery Mode — Completed successfully"**. Twarde asercje (`pct exec 100`): SHA-256 plików na serwerze == S1, plik dodany po S1 **USUNIĘTY**, DB `recovery_session.state='DONE'` + `pre_recovery_snapshot_id` NOT NULL | ~55s | PASS (2×) |
 
 Co realnie weryfikuje (BEZ mocków szyfrowania/seal/restore/SHA-256):
 - **Backup**: świeże, unikatowe pliki źródłowe za każdym runem → agent skanuje, pakuje (tar.gz + `.properbackup-idx`), szyfruje AES-256-GCM (PBKDF2-SHA256 200k), uploaduje do buffera.
@@ -69,6 +70,17 @@ Co realnie weryfikuje (BEZ mocków szyfrowania/seal/restore/SHA-256):
 > **Wersja UI-owa** (zastępuje wcześniejsze nagranie API-driven, które pokazywało puste okno przeglądarki bo cały restore leciał przez `page.request` + krypto w Node). Twarde asercje (DB-first + SHA-256 pliku na `/mnt/storage`) pozostają bez zmian — UI to warstwa oglądalności nagrania.
 
 Test code: [`properbackup-web/tests/e2e/backup-core-ui-e2e.spec.js`](https://github.com/SoftifyStudio/properbackup-web/tree/main/tests/e2e/backup-core-ui-e2e.spec.js) (config: `playwright.backup-core-ui.config.js`, helpery: `helpers/localPipeline.js` + `helpers/properCrypto.js`). Szybka asercja API pozostaje w [`backup-core-e2e.spec.js`](https://github.com/SoftifyStudio/properbackup-web/tree/main/tests/e2e/backup-core-e2e.spec.js). Naprawiony przy okazji realny bug: `RecoveryWizard` null-derefował `snapshot.node` przy restore z Timeline (snapshot-level), co wywalało panel na biały ekran. Natywne wideo Playwright (`video:'on'`), `workers=1`, zielony 2× pod rząd.
+
+### test02 — agent-driven in-place restore (cofnięcie na osi czasu)
+
+`test01` testuje ścieżkę **„Download and decrypt"** (klient pobiera `.tar.gz` i deszyfruje w przeglądarce — NIE przywraca działania serwera). `test02` testuje **prawdziwe odzyskanie dla klienta**: klient klika **„Przywróć"** przy snapshocie na Timeline, a agent po stronie serwera zapisuje pliki z powrotem do **oryginalnych ścieżek** in-place — wierne odtworzenie stanu z S1 (literalne cofnięcie na osi czasu: pliki dodane po S1 USUNIĘTE, zmienione cofnięte, usunięte odtworzone). State machine: `REQUESTED → PLANNING → AWAITING_USER_CONFIRM → READY → AGENT_RESTORING → VERIFYING → DONE`, z pre-recovery snapshotem (rollback safety) i `CriticalPathsGuard`.
+
+Test code: [`properbackup-web/tests/e2e/in-place-restore-e2e.spec.js`](https://github.com/SoftifyStudio/properbackup-web/tree/main/tests/e2e/in-place-restore-e2e.spec.js) (config: `playwright.in-place-restore.config.js`, helpery: `helpers/dedyk.js`). Natywne wideo Playwright (`video:'on'`), `workers=1`, zielony 2× pod rząd.
+
+**3 realne błędy znalezione i naprawione (red-first, w KODZIE — nie w teście):**
+1. **shared/agent** — `RestoreOrchestrator.executeDryRun` nie miał fallbacku „derive from archive"; agent padał na dry_run, bo buffer nie ma `/agent/snapshot/{id}/files` (404). Dodano `deriveSnapshotFilesFromArchive` (pobiera pack → deszyfruje → liczy listę plików — to samo źródło prawdy co restore).
+2. **buffer** — brak endpointu `POST /agent/recovery/{id}/started`; sesja utykała w `READY` (przejście `READY→VERIFYING` nielegalne). Dodano handler `READY→AGENT_RESTORING` (+ `POST /agent/recovery/{id}/pre_snapshot` dla HR-5 pre-recovery snapshot).
+3. **web** — UI nigdy nie pokazywał stanu końcowego: zdarzenia SSE `recovery_state`/`recovery_progress` niosą id jako `sessionId`, a overlay/REST używają `id` → `RecoveryModeOverlay` nie miał id do pollowania, a kontekst kasował sesje terminalne, więc `DONE` nigdy się nie renderował. Naprawione: normalizacja `id` z `sessionId` na granicy kontekstu (`BackupsPage`) + latch id w overlayu (polling trwa aż do stanu terminalnego).
 
 ## Videos (2026-05-31 — money module hardening)
 
