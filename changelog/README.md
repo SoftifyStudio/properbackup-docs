@@ -2,6 +2,13 @@
 
 Lista zmian w projekcie ProperBackup, w odwrotnej kolejnosci chronologicznej.
 
+## 2026-06
+
+| Data | Opis | PRy |
+|------|------|-----|
+| 2026-06-28 | [In-place restore (cofnięcie na osi czasu) — E2E + naprawa kodu](2026-06-28-in-place-restore-e2e.md) | buffer#44, shared#21/#22, agent#18, web#54, docs#33 |
+| 2026-06-28 | [Docs KANON (00-START-TUTAJ) + naprawa cennika/ekonomii](2026-06-28-docs-kanon-i-naprawa-cennika.md) | docs#29 |
+
 ## 2026-05
 
 | Data | Opis | PRy |
