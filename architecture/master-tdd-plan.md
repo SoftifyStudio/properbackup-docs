@@ -1857,7 +1857,7 @@ Zasady twarde dla nagran:
 
 | Test | Cel | Status | Nagranie (.webm) | Commit impl. |
 |------|-----|--------|------------------|--------------|
-| [TDD-PIPE-1] | pelny pipeline agent->buffer->seal->/mnt/storage->restore->SHA-256 (dedyk LXC 100) | **PASS** (2x, 2026-06-28) | [test01-full-pipeline-restore.webm](../e2e-videos/2026-06-28-backup-core-pipeline/test01-full-pipeline-restore.webm) | properbackup-web `backup-core-e2e.spec.js` |
+| [TDD-PIPE-1] | pelny pipeline agent->buffer->seal->/mnt/storage->restore->SHA-256 (dedyk LXC 100), **restore napedzany przez UI panelu** (login formularzem -> Timeline -> wybor snapshotu -> kreator Restore -> potwierdzenie); DB-first + SHA-256 bez zmian | **PASS** (2x, 2026-06-28, UI-driven ~23s) | [test01-full-pipeline-restore.webm](../e2e-videos/2026-06-28-backup-core-pipeline/test01-full-pipeline-restore.webm) | properbackup-web `backup-core-ui-e2e.spec.js` (+ fix `RecoveryWizard` null-deref `snapshot.node`) |
 | [TDD-A1] | rejestracja -> pending payment | _do uzupelnienia_ | — | — |
 | [TDD-B2] | webhook sig + idempotency + DLQ | _do uzupelnienia_ | — | — |
 | [TDD-E1] | trial abuse (fingerprint + heurystyki) | _do uzupelnienia_ | — | — |
