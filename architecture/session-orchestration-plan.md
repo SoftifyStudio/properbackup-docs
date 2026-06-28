@@ -435,7 +435,7 @@ Quota liczona na **fizycznych bajtach po kompresji** (co faktycznie siedzi na de
 
 ### Zasady
 
-- **Retencja po rezygnacji:** 90 dni. Dane dostepne do restore (canRestore=true), backup zatrzymany (canUpload=false). Po 90 dniach: email ostrzegawczy 7 dni przed → fizyczne usuniecie z OVH
+- **Retencja po rezygnacji:** 90 dni. Dane dostepne do restore (canRestore=true), backup zatrzymany (canUpload=false). Po 90 dniach: email ostrzegawczy 7 dni przed → fizyczne usuniecie z serwera/dysku
 - **Zacheta do rocznego:** roczny = **pełny sufit tieru (2× start) od razu**, bez progresywnego wzrostu (ZATWIERDZONE 2026-06-21)
 - **Downgrade:** jezeli current usage > nowa quota → backup zatrzymany (canUpload=false). Dane przechowywane. Klient musi wyczyscic albo wrocic na wyzszy tier
 - **Unlimited devices:** quota WSPOLNA dla wszystkich urzadzen. Web UI jasno komunikuje: "Wiecej urzadzen = szybsze zuzycie limitu"

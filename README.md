@@ -16,7 +16,6 @@ Centralne repozytorium dokumentacji projektu ProperBackup.
 /changelog       — lista zmian z datami
 /deployment      — przewodnik wdrożeniowy (dedyk OVH, nginx, SSL, Stripe)
 /scripts         — skrypty migracyjne, narzędzia operacyjne
-/legal           — RODO, DPA, polityki
 ```
 
 ## Repozytoria projektu

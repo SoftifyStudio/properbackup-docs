@@ -20,7 +20,7 @@ Płatność roczna ≈ 25% taniej **i** od razu pełny sufit tieru.
 | **L** | 500 GB | 1 TB | 59 zł | 529 zł |
 | **XL** | 1 TB | 2 TB | 89 zł | 790 zł |
 
-- Trial: **30 dni**.
+- Trial: **30 dni** (45 dni dla agencji WP/IT — segment B2B). Anti-abuse: soft limit **500 GB** w trialu, rate limit flushy, weryfikacja email.
 - **Quota „Opcja 2":** start rośnie **+10% startu/mc** aż do **2× startu** (sufit per tier). To NIE jest „wspólne 2 TB dla każdego" (stara, błędna reguła — odrzucona).
 - **Po rezygnacji:** 90 dni dostępu do restore (canRestore=true, canUpload=false), potem mail 7 dni przed → fizyczne usunięcie.
 - **Downgrade:** jeśli zużycie > nowa quota → backup zatrzymany, dane zachowane, klient czyści lub wraca wyżej.
