@@ -65,7 +65,7 @@ rate limit flushy, weryfikacja email, alerty).
 - **Storage primary = dedykowany serwer OVH** (RAID5 ~10–11 TB, `/mnt/storage`), restore instant.
 - **DR docelowo = drugi serwer dedykowany (Proxmox Backup Server)** — identyczny box tylko na backupy, koszt stały, inkrementalny+dedup. Na teraz: dowolna tania kopia offsite („byle gdzie zgrane"). OVH cold odrzucone jako za drogie (per-GB).
 - **Koszt = STAŁY ~135 zł brutto/mc** za cały serwer (nie per-GB jak w v6.2).
-- Szczegóły: [kanon §B/§C/§D](../00-START-TUTAJ/2-DECYZJE-AKTUALNE.md#b-storage--gdzie-leza-dane-zatwierdzony-2026-06-20) + [`../architecture/pricing-and-storage-economics.md`](../architecture/pricing-and-storage-economics.md) §9.
+- Szczegóły: [kanon §B/§C/§D](../00-START-TUTAJ/2-DECYZJE-AKTUALNE.md#b-storage--gdzie-leżą-dane-zatwierdzony-2026-06-20) + [`../architecture/pricing-and-storage-economics.md`](../architecture/pricing-and-storage-economics.md) §9.
 
 ## 9. Koszty roczne (model All-Devin)
 - **Rozwój:** intensywny 1-miesięczny sprint Devina, potem tani tryb utrzymania. Łączny koszt AI ~**5 500 zł/rok**.
