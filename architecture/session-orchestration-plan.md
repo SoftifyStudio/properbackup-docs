@@ -19,10 +19,11 @@ Dane klientow przechowujemy **WYLACZNIE na dedykowanym serwerze OVH**
 (Kimsufi KS-STOR, 4x4 TB HDD RAID5 = ~11 TB na `/mnt/storage`).
 **NIE replikujemy aplikacyjnie do Cloud Archive ani innej chmury.**
 
-- **Durability / offsite / DR:** realizowane na poziomie infrastruktury przez
-  **wlasny backup calego serwera OVH** (OVH server backup), NIE w kodzie aplikacji.
+- **Durability / offsite / DR:** kopia #2 (offsite) na **OVH cold/backup**
+  (write-once, tanio), na poziomie infrastruktury, NIE w kodzie aplikacji.
+  Pelny model DR: `pricing-and-storage-economics.md` §9.5 (decyzja 2026-06-28).
 - **Restore jest INSTANT** — brak unsealing/thawing. Pliki czytane bezposrednio
-  z lokalnego dysku.
+  z lokalnego dysku (hot RAID). Cold OVH sluzy WYLACZNIE do DR (padl caly dedyk).
 
 ### Konsekwencje dla kodu
 1. **Storage backend** = interfejs `StorageClient` + `LocalFsStorageClient`
@@ -408,7 +409,11 @@ properbackup-buffer/
 
 ## 5. Model cenowy — ZATWIERDZONY (2026-06-20, decyzja Daniela)
 
-### Fakty (OVH Cloud Archive, netto)
+> ⚠ **Koszt NASZ = STAŁY serwer (dedyk OVH ~135 zł brutto/mc).** Pełny model kosztu,
+> marży i quoty: `pricing-and-storage-economics.md` §9 (NADRZĘDNE). Poniższe stawki
+> per-GB OVH to już tylko koszt **offsite DR (OVH cold, kopia #2)** + benchmark, NIE koszt primary.
+
+### Fakty (OVH cold/backup = offsite DR + benchmark, netto)
 - Storage: 0,0000132 PLN/GiB/godz = **9,64 PLN/TiB/mc netto** = **11,86 PLN/TiB/mc brutto**
 - Zapis (ingress): **0,04 PLN/GiB netto** = **0,049 PLN/GiB brutto**
 - Egress (restore): **DARMOWY**
@@ -416,8 +421,8 @@ properbackup-buffer/
 
 ### Cennik (FINAL)
 
-Unlimited devices w kazdym tierze. Quota = start quota, rosnie +150 GB/mc, max 2 TB.
-Quota liczona na **fizycznych bajtach po kompresji** (co faktycznie siedzi na OVH).
+Unlimited devices w kazdym tierze. Quota = start quota, rośnie **+10% startu/mc, sufit 2× startu per tier** (Opcja 2 — NIE wspólne 2 TB dla każdego). Pełne liczby: `pricing-and-storage-economics.md` §9.4.
+Quota liczona na **fizycznych bajtach po kompresji** (co faktycznie siedzi na dedyku).
 
 | Tier | Start quota | Cena mc | Cena rok (~25% rabat) | Zysk worst case 1mc + 90dni ret. |
 |---|---|---|---|---|
@@ -429,7 +434,7 @@ Quota liczona na **fizycznych bajtach po kompresji** (co faktycznie siedzi na OV
 ### Zasady
 
 - **Retencja po rezygnacji:** 90 dni. Dane dostepne do restore (canRestore=true), backup zatrzymany (canUpload=false). Po 90 dniach: email ostrzegawczy 7 dni przed → fizyczne usuniecie z OVH
-- **Zacheta do rocznego:** nie rabat cenowy, ale roczny = pelna start quota od razu (bez progresywnego wzrostu? — do decyzji)
+- **Zacheta do rocznego:** roczny = **pełny sufit tieru (2× start) od razu**, bez progresywnego wzrostu (ZATWIERDZONE 2026-06-21)
 - **Downgrade:** jezeli current usage > nowa quota → backup zatrzymany (canUpload=false). Dane przechowywane. Klient musi wyczyscic albo wrocic na wyzszy tier
 - **Unlimited devices:** quota WSPOLNA dla wszystkich urzadzen. Web UI jasno komunikuje: "Wiecej urzadzen = szybsze zuzycie limitu"
 - **Kompresja:** GZIPOutputStream przed AES-256-GCM. Klient "widzi" wiecej miejsca niz fizycznie zajmuje (bonus)
